@@ -1,0 +1,5 @@
+slack-sdk
+python-dotenv
+tqdm
+chromadb==0.5.5
+sentence-transformers
