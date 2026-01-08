@@ -40,5 +40,7 @@ def get_threads_from_channel(channel_id, limit=10):
         return []
 
 if __name__ == "__main__":
-    CHANNEL_ID="C0A4LV0HZJ7"
+    CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID")
+    if not CHANNEL_ID:
+        raise ValueError("SLACK_CHANNEL_ID environment variable is not set")
     get_threads_from_channel(CHANNEL_ID)
