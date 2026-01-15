@@ -20,8 +20,8 @@ def builder():
             continue
 
         user = msg.get('user', 'unknown_user')
-        ts = msg.get('ts', 'no_ts')
-        thread_id = msg.get('thread_ts', ts)
+        ts = float(msg.get('ts', 'no_ts'))
+        thread_id = float(msg.get('thread_ts', ts))
         full_text = f"User: {user}\nMessage: {text}\nTimestamp: {ts}"
         print(full_text)
         text_to_embed=f"{text}"
