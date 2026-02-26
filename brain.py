@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from ingest import get_threads_from_channel
-from memory import add_messages
+from memory.storage import add_messages
 
 load_dotenv()
 

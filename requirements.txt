@@ -3,3 +3,6 @@ python-dotenv
 tqdm
 chromadb==0.5.5
 sentence-transformers
+dateparser
+numpy
+scikit-learn
