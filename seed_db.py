@@ -73,7 +73,8 @@ def get_mock_threads():
     return mock_messages
 
 
-if __name__ == "__main__":
+def seed():
+    """Seed ChromaDB with mock threads. Callable from benchmark.py or standalone."""
     print("Fetching mock threads for testing...")
     
     # Get mock messages (simulating Slack API response)
@@ -109,3 +110,7 @@ if __name__ == "__main__":
     # Add to memory
     add_messages(texts, ids, metadatas)
     print("Mock threads saved to chromadb successfully.")
+
+
+if __name__ == "__main__":
+    seed()

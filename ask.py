@@ -11,17 +11,24 @@ if __name__ == "__main__":
 
         result = query_text_phase_2(user_query)
 
-        if not result or not result.get('messages'):
+        if not result or not result.get('threads'):
             print("No relevant messages found.")
             continue
         
         if result['is_fallback']:
             print(f"{result['fallback_reason']}. Showing older relevant results instead.")
         
-        print("Top relevant messages:")
-        for item in result['messages']:
-            meta=item['metadata']
-            text=item['document']
-            # confidence=item['distance']
-            print(f"User ({meta['user']}) at {meta['ts']}: said {text}")
+        if result['type'] == 'broad':
+            print(f"Broad query — found {len(result['threads'])} relevant threads:\n")
+        else:
+            print(f"\nFound 1 relevant thread:\n")
+
+        for i, thread in enumerate(result['threads']):
+            if len(result['threads']) > 1:
+                print(f"--- Thread {i+1} (id: {thread['thread_id']}) ---")
+            for item in thread['messages']:
+                meta = item['metadata']
+                text = item['document']
+                print(f"  @{meta['user']} [{meta['ts']}]: {text}")
+            print()
             

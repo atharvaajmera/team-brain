@@ -43,13 +43,18 @@ def mmr_sort(query_embedding, candidate_embeddings, top_k=5, lambda_param=0.5):
 
     return selected_indices
 
-ALPHA = 0.05  # Weight for message count bonus: log(count+1) * alpha
+ALPHA = 0.25              # Weight for message count bonus
+RELATIVE_GAP_THRESHOLD = 0.1  # Below this → flat distribution → broad query
+MIN_SIGNAL_STRENGTH = 0.2 # Minimum (mean_dist - best_dist) to consider a real match
+MAX_BROAD_THREADS = 3     # Max threads returned for broad queries
+MIN_THREAD_SIZE = 2       # Minimum messages for NORMAL mode selection
 
-def select_anchor(candidates, mode,):
+def select_anchor(candidates, mode):
     if not candidates:
         print(f"[DEBUG] select_anchor FAILED: No candidates provided | mode={mode}")
         return None
 
+    # --- Group candidates by thread ---
     threads = {}
     for candidate in candidates:
         thread_id = candidate['metadata']['thread_id']
@@ -61,12 +66,12 @@ def select_anchor(candidates, mode,):
         threads[thread_id]['candidates'].append(candidate)
         threads[thread_id]['distances'].append(candidate['distance'])
     
+    # --- Compute thread scores ---
     thread_aggregates = []
     for thread_id, thread_data in threads.items():
         avg_distance = np.mean(thread_data['distances'])
         min_distance = np.min(thread_data['distances'])
         message_count = len(thread_data['candidates'])
-        # Penalize single-message threads: higher count → bigger bonus (lower score)
         thread_score = avg_distance - np.log(message_count + 1) * ALPHA
         thread_aggregates.append({
             'thread_id': thread_id,
@@ -78,45 +83,79 @@ def select_anchor(candidates, mode,):
         })
     
     sorted_threads = sorted(thread_aggregates, key=lambda x: x['thread_score'])
-    best_thread = sorted_threads[0]
-    
-    confidence_gap = None
-    if len(sorted_threads) > 1:
-        second_best_thread = sorted_threads[1]
-        confidence_gap = second_best_thread['thread_score'] - best_thread['thread_score']
-        print(f"[DEBUG] select_anchor: Best thread score={best_thread['thread_score']:.4f} "
-              f"(avg_dist={best_thread['avg_distance']:.4f}, msgs={best_thread['message_count']}), "
-              f"Second-best score={second_best_thread['thread_score']:.4f}, "
-              f"Confidence gap={confidence_gap:.4f}, "
-              f"min_distance={best_thread['min_distance']:.4f} | mode={mode}")
-    else:
-        print(f"[DEBUG] select_anchor: Best thread score={best_thread['thread_score']:.4f} "
-              f"(avg_dist={best_thread['avg_distance']:.4f}, msgs={best_thread['message_count']}), "
-              f"min_distance={best_thread['min_distance']:.4f} (only thread) | mode={mode}")
 
+    # --- Filter single-message threads in NORMAL mode ---
     if mode == "NORMAL":
-        # Dynamic threshold: 80th percentile of all candidate distances
-        all_distances = [c['distance'] for c in candidates]
-        threshold = np.percentile(all_distances, 80)
-        
-        if best_thread['thread_score'] >= threshold:
-            print(f"[DEBUG] select_anchor FAILED: Best thread score {best_thread['thread_score']:.4f} >= p80 threshold {threshold:.4f}")
+        multi_msg = [t for t in sorted_threads if t['message_count'] >= MIN_THREAD_SIZE]
+        if multi_msg:
+            sorted_threads = multi_msg
+            print(f"[DEBUG] Filtered to {len(sorted_threads)} multi-message threads")
+
+    best = sorted_threads[0]
+
+    # --- Signal strength: does the best thread stand out from the noise? ---
+    all_distances = [c['distance'] for c in candidates]
+    mean_distance = np.mean(all_distances)
+    signal_strength = mean_distance - best['min_distance']
+
+    if len(sorted_threads) < 2:
+        print(f"[DEBUG] select_anchor: Only 1 thread, score={best['thread_score']:.4f}, "
+              f"signal_strength={signal_strength:.4f} (mean={mean_distance:.4f}, best_dist={best['min_distance']:.4f})")
+        if mode == "NORMAL" and signal_strength < MIN_SIGNAL_STRENGTH:
+            print(f"[DEBUG] select_anchor FAILED: signal_strength {signal_strength:.4f} < {MIN_SIGNAL_STRENGTH}, query is noise")
             return None
-        
-        # Check confidence gap - if too small relative to score spread, results may be ambiguous
-        if confidence_gap is not None:
-            all_scores = [t['thread_score'] for t in sorted_threads]
-            score_spread = np.percentile(all_scores, 80) - np.percentile(all_scores, 20)
-            min_gap = score_spread * 0.1  # gap must be at least 10% of the score spread
-            if confidence_gap < min_gap:
-                print(f"[DEBUG] select_anchor FAILED: Confidence gap {confidence_gap:.4f} < min_gap {min_gap:.4f} (10% of spread {score_spread:.4f}), too ambiguous")
-                return None
-        
-        gap_str = f"{confidence_gap:.4f}" if confidence_gap is not None else "N/A"
-        print(f"[DEBUG] select_anchor SUCCESS: Anchor found with score={best_thread['thread_score']:.4f}, confidence_gap={gap_str}")
-        return best_thread['best_candidate']
-    elif mode == "FALLBACK":
-        print(f"[DEBUG] select_anchor SUCCESS (FALLBACK): Returning best thread")
-        return best_thread['best_candidate']
-    else:
+        return {
+            'type': 'narrow',
+            'threads': [best['best_candidate']],
+            'thread_ids': [best['thread_id']]
+        }
+
+    # --- Relative gap analysis ---
+    second = sorted_threads[1]
+    gap = second['thread_score'] - best['thread_score']
+    spread = sorted_threads[-1]['thread_score'] - best['thread_score']
+    relative_gap = gap / spread if spread > 0 else 1.0
+
+    print(f"[DEBUG] select_anchor: best={best['thread_score']:.4f} (msgs={best['message_count']}), "
+          f"second={second['thread_score']:.4f}, gap={gap:.4f}, spread={spread:.4f}, "
+          f"relative_gap={relative_gap:.4f}, signal_strength={signal_strength:.4f} | mode={mode}")
+
+    if mode == "FALLBACK":
+        if relative_gap < RELATIVE_GAP_THRESHOLD:
+            top_threads = sorted_threads[:MAX_BROAD_THREADS]
+            print(f"[DEBUG] select_anchor BROAD (FALLBACK): returning {len(top_threads)} threads")
+            return {
+                'type': 'broad',
+                'threads': [t['best_candidate'] for t in top_threads],
+                'thread_ids': [t['thread_id'] for t in top_threads]
+            }
+        print(f"[DEBUG] select_anchor SUCCESS (FALLBACK): returning best thread")
+        return {
+            'type': 'narrow',
+            'threads': [best['best_candidate']],
+            'thread_ids': [best['thread_id']]
+        }
+
+    # --- NORMAL mode decision ---
+    if relative_gap < RELATIVE_GAP_THRESHOLD:
+        # Flat distribution → broad query → return top N threads
+        top_threads = sorted_threads[:MAX_BROAD_THREADS]
+        print(f"[DEBUG] select_anchor BROAD: relative_gap {relative_gap:.4f} < {RELATIVE_GAP_THRESHOLD}, "
+              f"returning {len(top_threads)} threads")
+        return {
+            'type': 'broad',
+            'threads': [t['best_candidate'] for t in top_threads],
+            'thread_ids': [t['thread_id'] for t in top_threads]
+        }
+    elif signal_strength < MIN_SIGNAL_STRENGTH:
+        # Best thread doesn't stand out from the noise
+        print(f"[DEBUG] select_anchor FAILED: signal_strength {signal_strength:.4f} < {MIN_SIGNAL_STRENGTH}, query is noise")
         return None
+    else:
+        # Clear winner → narrow query
+        print(f"[DEBUG] select_anchor SUCCESS (NARROW): score={best['thread_score']:.4f}, relative_gap={relative_gap:.4f}")
+        return {
+            'type': 'narrow',
+            'threads': [best['best_candidate']],
+            'thread_ids': [best['thread_id']]
+        }
