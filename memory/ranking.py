@@ -43,11 +43,29 @@ def mmr_sort(query_embedding, candidate_embeddings, top_k=5, lambda_param=0.5):
 
     return selected_indices
 
-ALPHA = 0.25              # Weight for message count bonus
-RELATIVE_GAP_THRESHOLD = 0.1  # Below this → flat distribution → broad query
-MIN_SIGNAL_STRENGTH = 0.2 # Minimum (mean_dist - best_dist) to consider a real match
-MAX_BROAD_THREADS = 3     # Max threads returned for broad queries
-MIN_THREAD_SIZE = 2       # Minimum messages for NORMAL mode selection
+ALPHA = 0.25
+# ── 4-class thresholds ──
+REL_GAP_HIGH = 0.30
+ENTROPY_LOW = 0.50
+ENTROPY_MED_HI = 0.62
+SIGNAL_LOW_THRESH = 2.2
+ENTROPY_TEMP = 0.1
+MAX_BROAD_THREADS = 3
+MAX_AMBIGUOUS_THREADS = 2
+MIN_THREAD_SIZE = 2
+
+
+def _softmax_entropy(values, temp):
+    """Compute normalized softmax entropy over values."""
+    import math as _math
+    v = np.array(values)
+    neg_over_T = -v / temp
+    neg_over_T -= neg_over_T.max()
+    exp_s = np.exp(neg_over_T)
+    probs = exp_s / exp_s.sum()
+    ent = float(-np.sum(probs * np.log2(probs + 1e-10)))
+    max_ent = float(_math.log2(len(v))) if len(v) > 1 else 1.0
+    return ent / max_ent
 
 def select_anchor(candidates, mode):
     if not candidates:
@@ -93,69 +111,66 @@ def select_anchor(candidates, mode):
 
     best = sorted_threads[0]
 
-    # --- Signal strength: does the best thread stand out from the noise? ---
+    # --- Compute decision metrics ---
     all_distances = [c['distance'] for c in candidates]
     mean_distance = np.mean(all_distances)
-    signal_strength = mean_distance - best['min_distance']
+    std_distance = float(np.std(all_distances))
+    signal = mean_distance - best['min_distance']
+    signal_norm = signal / std_distance if std_distance > 0 else 0.0
+    abs_ratio = best['min_distance'] / mean_distance if mean_distance > 0 else 1.0
 
-    if len(sorted_threads) < 2:
-        print(f"[DEBUG] select_anchor: Only 1 thread, score={best['thread_score']:.4f}, "
-              f"signal_strength={signal_strength:.4f} (mean={mean_distance:.4f}, best_dist={best['min_distance']:.4f})")
-        if mode == "NORMAL" and signal_strength < MIN_SIGNAL_STRENGTH:
-            print(f"[DEBUG] select_anchor FAILED: signal_strength {signal_strength:.4f} < {MIN_SIGNAL_STRENGTH}, query is noise")
-            return None
-        return {
-            'type': 'narrow',
-            'threads': [best['best_candidate']],
-            'thread_ids': [best['thread_id']]
-        }
+    # --- Compute entropy over thread scores ---
+    thread_scores = [t['thread_score'] for t in sorted_threads]
+    entropy = _softmax_entropy(thread_scores, ENTROPY_TEMP)
 
-    # --- Relative gap analysis ---
-    second = sorted_threads[1]
-    gap = second['thread_score'] - best['thread_score']
-    spread = sorted_threads[-1]['thread_score'] - best['thread_score']
-    relative_gap = gap / spread if spread > 0 else 1.0
+    if len(sorted_threads) >= 2:
+        second = sorted_threads[1]
+        gap_score = second['thread_score'] - best['thread_score']
+        spread = sorted_threads[-1]['thread_score'] - best['thread_score']
+        rel_gap = gap_score / spread if spread > 0 else 1.0
+    else:
+        rel_gap = 1.0  # only one thread → treat as narrow
 
     print(f"[DEBUG] select_anchor: best={best['thread_score']:.4f} (msgs={best['message_count']}), "
-          f"second={second['thread_score']:.4f}, gap={gap:.4f}, spread={spread:.4f}, "
-          f"relative_gap={relative_gap:.4f}, signal_strength={signal_strength:.4f} | mode={mode}")
+          f"signal_norm={signal_norm:.4f}, abs_ratio={abs_ratio:.4f}, "
+          f"rel_gap={rel_gap:.4f}, entropy={entropy:.4f} | mode={mode}")
 
-    if mode == "FALLBACK":
-        if relative_gap < RELATIVE_GAP_THRESHOLD:
+    # --- Decision rule: 4-class (NARROW → AMBIGUOUS → BROAD → REJECT) ---
+    def _decide():
+        # 1. rel_gap high AND entropy low → NARROW
+        if rel_gap > REL_GAP_HIGH and entropy < ENTROPY_LOW:
+            print(f"[DEBUG] select_anchor NARROW: rel_gap {rel_gap:.4f} > {REL_GAP_HIGH} "
+                  f"AND entropy {entropy:.4f} < {ENTROPY_LOW}")
+            return {
+                'type': 'narrow',
+                'threads': [best['best_candidate']],
+                'thread_ids': [best['thread_id']]
+            }
+
+        # 2. rel_gap medium AND entropy medium → AMBIGUOUS
+        if 0.05 < rel_gap < 0.50 and 0.20 < entropy < ENTROPY_MED_HI:
+            top_threads = sorted_threads[:MAX_AMBIGUOUS_THREADS]
+            print(f"[DEBUG] select_anchor AMBIGUOUS: rel_gap {rel_gap:.4f}, "
+                  f"entropy {entropy:.4f} → returning {len(top_threads)} threads")
+            return {
+                'type': 'ambiguous',
+                'threads': [t['best_candidate'] for t in top_threads],
+                'thread_ids': [t['thread_id'] for t in top_threads]
+            }
+
+        # 3. signal medium → BROAD
+        if signal_norm >= SIGNAL_LOW_THRESH:
             top_threads = sorted_threads[:MAX_BROAD_THREADS]
-            print(f"[DEBUG] select_anchor BROAD (FALLBACK): returning {len(top_threads)} threads")
+            print(f"[DEBUG] select_anchor BROAD: signal_norm {signal_norm:.4f} ≥ {SIGNAL_LOW_THRESH} "
+                  f"→ returning {len(top_threads)} threads")
             return {
                 'type': 'broad',
                 'threads': [t['best_candidate'] for t in top_threads],
                 'thread_ids': [t['thread_id'] for t in top_threads]
             }
-        print(f"[DEBUG] select_anchor SUCCESS (FALLBACK): returning best thread")
-        return {
-            'type': 'narrow',
-            'threads': [best['best_candidate']],
-            'thread_ids': [best['thread_id']]
-        }
 
-    # --- NORMAL mode decision ---
-    if relative_gap < RELATIVE_GAP_THRESHOLD:
-        # Flat distribution → broad query → return top N threads
-        top_threads = sorted_threads[:MAX_BROAD_THREADS]
-        print(f"[DEBUG] select_anchor BROAD: relative_gap {relative_gap:.4f} < {RELATIVE_GAP_THRESHOLD}, "
-              f"returning {len(top_threads)} threads")
-        return {
-            'type': 'broad',
-            'threads': [t['best_candidate'] for t in top_threads],
-            'thread_ids': [t['thread_id'] for t in top_threads]
-        }
-    elif signal_strength < MIN_SIGNAL_STRENGTH:
-        # Best thread doesn't stand out from the noise
-        print(f"[DEBUG] select_anchor FAILED: signal_strength {signal_strength:.4f} < {MIN_SIGNAL_STRENGTH}, query is noise")
+        # 4. signal low → REJECT
+        print(f"[DEBUG] select_anchor REJECT: signal_norm {signal_norm:.4f} < {SIGNAL_LOW_THRESH}")
         return None
-    else:
-        # Clear winner → narrow query
-        print(f"[DEBUG] select_anchor SUCCESS (NARROW): score={best['thread_score']:.4f}, relative_gap={relative_gap:.4f}")
-        return {
-            'type': 'narrow',
-            'threads': [best['best_candidate']],
-            'thread_ids': [best['thread_id']]
-        }
+
+    return _decide()

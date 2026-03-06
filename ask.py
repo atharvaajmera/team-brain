@@ -20,6 +20,8 @@ if __name__ == "__main__":
         
         if result['type'] == 'broad':
             print(f"Broad query — found {len(result['threads'])} relevant threads:\n")
+        elif result['type'] == 'ambiguous':
+            print(f"Ambiguous query — found {len(result['threads'])} possibly relevant threads:\n")
         else:
             print(f"\nFound 1 relevant thread:\n")
 
