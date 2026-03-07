@@ -29,7 +29,6 @@ def retrieve_candidates(query, intent, with_filter=True):
     )
 
     if not results['documents'] or not results['documents'][0]:
-        print(f"[DEBUG] Phase 1 FAILED: No documents found for query='{query}' with filter={chroma_filter}")
         return []
     
     docs = results['documents'][0]

@@ -69,7 +69,6 @@ def _softmax_entropy(values, temp):
 
 def select_anchor(candidates, mode):
     if not candidates:
-        print(f"[DEBUG] select_anchor FAILED: No candidates provided | mode={mode}")
         return None
 
     # --- Group candidates by thread ---
@@ -107,7 +106,6 @@ def select_anchor(candidates, mode):
         multi_msg = [t for t in sorted_threads if t['message_count'] >= MIN_THREAD_SIZE]
         if multi_msg:
             sorted_threads = multi_msg
-            print(f"[DEBUG] Filtered to {len(sorted_threads)} multi-message threads")
 
     best = sorted_threads[0]
 
@@ -131,46 +129,49 @@ def select_anchor(candidates, mode):
     else:
         rel_gap = 1.0  # only one thread → treat as narrow
 
-    print(f"[DEBUG] select_anchor: best={best['thread_score']:.4f} (msgs={best['message_count']}), "
-          f"signal_norm={signal_norm:.4f}, abs_ratio={abs_ratio:.4f}, "
-          f"rel_gap={rel_gap:.4f}, entropy={entropy:.4f} | mode={mode}")
+    # --- Stats dict to pass through ---
+    stats = {
+        'signal_norm': round(signal_norm, 4),
+        'abs_ratio': round(abs_ratio, 4),
+        'rel_gap': round(rel_gap, 4),
+        'entropy': round(entropy, 4),
+        'n_threads': len(sorted_threads),
+        'best_score': round(float(best['thread_score']), 4),
+        'best_msgs': best['message_count'],
+    }
 
-    # --- Decision rule: 4-class (NARROW → AMBIGUOUS → BROAD → REJECT) ---
+    # --- Decision rule: 4-class (NARROW -> AMBIGUOUS -> BROAD -> REJECT) ---
     def _decide():
-        # 1. rel_gap high AND entropy low → NARROW
+        # 1. rel_gap high AND entropy low -> NARROW
         if rel_gap > REL_GAP_HIGH and entropy < ENTROPY_LOW:
-            print(f"[DEBUG] select_anchor NARROW: rel_gap {rel_gap:.4f} > {REL_GAP_HIGH} "
-                  f"AND entropy {entropy:.4f} < {ENTROPY_LOW}")
             return {
                 'type': 'narrow',
                 'threads': [best['best_candidate']],
-                'thread_ids': [best['thread_id']]
+                'thread_ids': [best['thread_id']],
+                'stats': stats,
             }
 
-        # 2. rel_gap medium AND entropy medium → AMBIGUOUS
+        # 2. rel_gap medium AND entropy medium -> AMBIGUOUS
         if 0.05 < rel_gap < 0.50 and 0.20 < entropy < ENTROPY_MED_HI:
             top_threads = sorted_threads[:MAX_AMBIGUOUS_THREADS]
-            print(f"[DEBUG] select_anchor AMBIGUOUS: rel_gap {rel_gap:.4f}, "
-                  f"entropy {entropy:.4f} → returning {len(top_threads)} threads")
             return {
                 'type': 'ambiguous',
                 'threads': [t['best_candidate'] for t in top_threads],
-                'thread_ids': [t['thread_id'] for t in top_threads]
+                'thread_ids': [t['thread_id'] for t in top_threads],
+                'stats': stats,
             }
 
-        # 3. signal medium → BROAD
+        # 3. signal medium -> BROAD
         if signal_norm >= SIGNAL_LOW_THRESH:
             top_threads = sorted_threads[:MAX_BROAD_THREADS]
-            print(f"[DEBUG] select_anchor BROAD: signal_norm {signal_norm:.4f} ≥ {SIGNAL_LOW_THRESH} "
-                  f"→ returning {len(top_threads)} threads")
             return {
                 'type': 'broad',
                 'threads': [t['best_candidate'] for t in top_threads],
-                'thread_ids': [t['thread_id'] for t in top_threads]
+                'thread_ids': [t['thread_id'] for t in top_threads],
+                'stats': stats,
             }
 
-        # 4. signal low → REJECT
-        print(f"[DEBUG] select_anchor REJECT: signal_norm {signal_norm:.4f} < {SIGNAL_LOW_THRESH}")
+        # 4. signal low -> REJECT
         return None
 
     return _decide()
