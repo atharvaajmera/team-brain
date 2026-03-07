@@ -13,26 +13,43 @@ ssl_context = ssl.create_default_context(cafile=certifi.where())
 
 client= WebClient(token=SLACK_BOT_TOKEN,ssl=ssl_context)
 
+def _get_author(msg):
+    """Return the human-readable author name.
+    For messages posted by the generator, reads from metadata.event_payload.author.
+    Falls back to the raw Slack user ID for real messages.
+    """
+    try:
+        return msg['metadata']['event_payload']['author']
+    except (KeyError, TypeError):
+        return msg.get('user', 'unknown')
+
+
 def get_threads_from_channel(channel_id, limit=10):
     message_array = []
     try:
         response=client.conversations_history(
             channel=channel_id,
-            limit=limit
+            limit=limit,
+            include_all_metadata=True,
         )
         messages=response['messages']
         for msg in messages:
-            print(f"User: {msg.get('user')}, Text: {msg.get('text')}")
+            author = _get_author(msg)
+            print(f"User: {author}, Text: {msg.get('text')}")
+            msg['author'] = author
             message_array.append(msg)
             if(msg.get('reply_count', 0) > 0):
                 thread_ts = msg.get('ts')
                 replies_response = client.conversations_replies(
                     channel=channel_id,
-                    ts=thread_ts
+                    ts=thread_ts,
+                    include_all_metadata=True,
                 )
                 replies = replies_response['messages'][1:]  
                 for reply in replies:
-                    print(f"  Reply from User: {reply.get('user')}, Text: {reply.get('text')}")
+                    reply_author = _get_author(reply)
+                    print(f"  Reply from User: {reply_author}, Text: {reply.get('text')}")
+                    reply['author'] = reply_author
                     message_array.append(reply)
         return message_array
     except Exception as e:

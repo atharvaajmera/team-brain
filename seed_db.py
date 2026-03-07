@@ -108,18 +108,18 @@ def seed():
         if not text.strip():
             continue
         
-        user = msg.get('user', 'unknown_user')
+        author = msg.get('author', msg.get('user', 'unknown_user'))
         ts = float(msg.get('ts', 'no_ts'))
         thread_id = float(msg.get('thread_ts', ts))
         
         # Log messages (same as ingest.py)
-        print(f"User: {user}, Text: {text}")
+        print(f"User: {author}, Text: {text}")
         
         text_to_embed = f"{text}"
         texts.append(text_to_embed)
-        ids.append(f"{user}_{ts}")
+        ids.append(f"{author}_{ts}")
         metadatas.append({
-            "user": user,
+            "author": author,
             "ts": ts,
             "text": text,
             "thread_id": thread_id
