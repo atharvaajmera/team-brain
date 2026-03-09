@@ -18,7 +18,7 @@ def _build_context(threads):
         lines = []
         for msg in msgs:
             meta = msg.get('metadata', {})
-            user = meta.get('user', 'unknown')
+            user = meta.get('author', meta.get('user', 'unknown'))
             ts = meta.get('ts', '')
             text = msg.get('document', '')
             lines.append(f"  @{user} [{ts}]: {text}")

@@ -43,16 +43,61 @@ def mmr_sort(query_embedding, candidate_embeddings, top_k=5, lambda_param=0.5):
 
     return selected_indices
 
+import json as _json
+import os as _os
+
 ALPHA = 0.25
-# ── 4-class thresholds ──
-REL_GAP_HIGH = 0.30
-ENTROPY_LOW = 0.50
-ENTROPY_MED_HI = 0.62
-SIGNAL_LOW_THRESH = 2.2
 ENTROPY_TEMP = 0.1
 MAX_BROAD_THREADS = 3
 MAX_AMBIGUOUS_THREADS = 2
 MIN_THREAD_SIZE = 2
+
+_PARAMS_PATH = "./parameters.json"
+
+# Fallback defaults — used when parameters.json doesn't exist yet.
+_DEFAULTS = {
+    "Z_REL_GAP_HIGH":    0.50,
+    "Z_ENTROPY_LOW":    -0.50,
+    "Z_REL_GAP_AMB_LO": -0.80,
+    "Z_REL_GAP_AMB_HI":  1.00,
+    "Z_ENTROPY_AMB_LO": -1.00,
+    "Z_ENTROPY_AMB_HI":  0.50,
+    "Z_SIGNAL_BROAD":    1.50,
+    "rel_gap_mean":      0.50,
+    "rel_gap_std":       0.30,
+    "entropy_mean":      0.50,
+    "entropy_std":       0.20,
+    "signal_norm_mean":  1.50,
+    "signal_norm_std":   1.00,
+}
+
+def _load_params():
+    if _os.path.exists(_PARAMS_PATH):
+        try:
+            with open(_PARAMS_PATH) as f:
+                return {**_DEFAULTS, **_json.load(f)}
+        except Exception as e:
+            print(f"[ranking] Warning: could not load {_PARAMS_PATH}: {e}")
+    return dict(_DEFAULTS)
+
+_PARAMS = _load_params()
+
+Z_REL_GAP_HIGH   = _PARAMS["Z_REL_GAP_HIGH"]
+Z_ENTROPY_LOW    = _PARAMS["Z_ENTROPY_LOW"]
+Z_REL_GAP_AMB_LO = _PARAMS["Z_REL_GAP_AMB_LO"]
+Z_REL_GAP_AMB_HI = _PARAMS["Z_REL_GAP_AMB_HI"]
+Z_ENTROPY_AMB_LO = _PARAMS["Z_ENTROPY_AMB_LO"]
+Z_ENTROPY_AMB_HI = _PARAMS["Z_ENTROPY_AMB_HI"]
+Z_SIGNAL_BROAD   = _PARAMS["Z_SIGNAL_BROAD"]
+
+_POP_STATS = {
+    "rel_gap_mean":     _PARAMS["rel_gap_mean"],
+    "rel_gap_std":      _PARAMS["rel_gap_std"],
+    "entropy_mean":     _PARAMS["entropy_mean"],
+    "entropy_std":      _PARAMS["entropy_std"],
+    "signal_norm_mean": _PARAMS["signal_norm_mean"],
+    "signal_norm_std":  _PARAMS["signal_norm_std"],
+}
 
 
 def _softmax_entropy(values, temp):
@@ -140,10 +185,16 @@ def select_anchor(candidates, mode):
         'best_msgs': best['message_count'],
     }
 
-    # --- Decision rule: 4-class (NARROW -> AMBIGUOUS -> BROAD -> REJECT) ---
+    # --- Decision rule: 4-class with z-score normalised thresholds ---
     def _decide():
+        ps = _POP_STATS
+        rg = rel_gap if isinstance(rel_gap, (int, float)) else 1.0
+        z_rg  = (rg         - ps['rel_gap_mean'])     / ps['rel_gap_std']     if ps['rel_gap_std']     > 0 else 0.0
+        z_ent = (entropy     - ps['entropy_mean'])     / ps['entropy_std']     if ps['entropy_std']     > 0 else 0.0
+        z_sig = (signal_norm - ps['signal_norm_mean']) / ps['signal_norm_std'] if ps['signal_norm_std'] > 0 else 0.0
+
         # 1. rel_gap high AND entropy low -> NARROW
-        if rel_gap > REL_GAP_HIGH and entropy < ENTROPY_LOW:
+        if z_rg > Z_REL_GAP_HIGH and z_ent < Z_ENTROPY_LOW:
             return {
                 'type': 'narrow',
                 'threads': [best['best_candidate']],
@@ -152,7 +203,7 @@ def select_anchor(candidates, mode):
             }
 
         # 2. rel_gap medium AND entropy medium -> AMBIGUOUS
-        if 0.05 < rel_gap < 0.50 and 0.20 < entropy < ENTROPY_MED_HI:
+        if Z_REL_GAP_AMB_LO < z_rg < Z_REL_GAP_AMB_HI and Z_ENTROPY_AMB_LO < z_ent < Z_ENTROPY_AMB_HI:
             top_threads = sorted_threads[:MAX_AMBIGUOUS_THREADS]
             return {
                 'type': 'ambiguous',
@@ -161,8 +212,8 @@ def select_anchor(candidates, mode):
                 'stats': stats,
             }
 
-        # 3. signal medium -> BROAD
-        if signal_norm >= SIGNAL_LOW_THRESH:
+        # 3. signal_norm high -> BROAD
+        if z_sig >= Z_SIGNAL_BROAD:
             top_threads = sorted_threads[:MAX_BROAD_THREADS]
             return {
                 'type': 'broad',
@@ -171,7 +222,7 @@ def select_anchor(candidates, mode):
                 'stats': stats,
             }
 
-        # 4. signal low -> REJECT
+        # 4. fallthrough -> REJECT
         return None
 
     return _decide()

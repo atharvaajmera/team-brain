@@ -6,9 +6,7 @@ from memory.storage import add_messages
 load_dotenv()
 
 def builder():
-    CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID")
-    if not CHANNEL_ID:
-        raise ValueError("SLACK_CHANNEL_ID environment variable is not set")
+    CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID_AUTO") 
     messages = get_threads_from_channel(CHANNEL_ID, limit=50)
     texts=[]
     ids=[]
@@ -19,16 +17,16 @@ def builder():
         if not text.strip():
             continue
 
-        user = msg.get('user', 'unknown_user')
+        author = msg.get('author', msg.get('user', 'unknown_user'))
         ts = float(msg.get('ts', 'no_ts'))
         thread_id = float(msg.get('thread_ts', ts))
-        full_text = f"User: {user}\nMessage: {text}\nTimestamp: {ts}"
+        full_text = f"User: {author}\nMessage: {text}\nTimestamp: {ts}"
         print(full_text)
         text_to_embed=f"{text}"
         texts.append(text_to_embed)
-        ids.append(f"{user}_{ts}")
+        ids.append(f"{author}_{ts}")
         metadatas.append({
-            "user": user,
+            "author": author,
             "ts": ts,
             "text": text,
             "thread_id": thread_id

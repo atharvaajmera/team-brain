@@ -240,169 +240,150 @@ def run_logreg_loo(all_results):
 
 
 TEST_QUERIES = [
-    # Thread 1 — Google OAuth Bug (7)
-    ("OAuth redirect problem",                "NARROW",  "exact → T1"),
-    ("Authentication failure",                "NARROW",  "synonym → T1 (401)"),
-    ("Login configuration issue",             "NARROW",  "indirect → T1"),
-    ("login isnt working after oauth",        "NARROW",  "casual → T1"),
-    ("authentcation fail",                    "NARROW",  "typo → T1"),
-    ("401 unauthorized error on login",       "NARROW",  "specific detail → T1"),
-    ("Google login HTTPS redirect fix",       "NARROW",  "exact detail → T1"),
+    # ── Thread 1 — OAuth token refresh failing ────────────────────────────
+    ("OAuth token refresh failing",                   "NARROW", "exact → T1"),
+    ("401 on token refresh in staging",               "NARROW", "specific detail → T1"),
+    ("client secret stale in staging env",            "NARROW", "specific → T1"),
+    ("refresh grant rejected by OAuth server",        "NARROW", "rephrased → T1"),
+    ("oauuth token failing staging",                  "NARROW", "typo → T1"),
+    ("staging auth broken after secret rotation",     "NARROW", "indirect → T1"),
 
-    # Thread 2 — General API Issues (1)
-    ("API endpoints timing out",              "NARROW",  "exact → T2"),
+    # ── Thread 2 — Google login redirect loop ─────────────────────────────
+    ("Google login redirect loop",                    "NARROW", "exact → T2"),
+    ("GOOGLE_CALLBACK_URL pointing to localhost",     "NARROW", "specific detail → T2"),
+    ("infinite redirect on Google sign-in",          "NARROW", "rephrased → T2"),
+    ("callback URL misconfigured in prod",            "NARROW", "indirect → T2"),
+    ("google login smoke test failing",               "NARROW", "specific → T2"),
 
-    # Thread 3 — API Documentation (2)
-    ("API documentation for new endpoints",   "NARROW",  "exact → T3"),
-    ("reviewing the new endpoint docs",       "NARROW",  "rephrased → T3"),
+    # ── Thread 3 — Slow queries on orders table ───────────────────────────
+    ("slow queries on orders table",                  "NARROW", "exact → T3"),
+    ("orders endpoint taking 4 to 6 seconds",         "NARROW", "specific → T3"),
+    ("missing index on created_at column",            "NARROW", "specific → T3"),
+    ("CREATE INDEX CONCURRENTLY orders table",        "NARROW", "exact detail → T3"),
+    ("P99 latency dropped after adding index",        "NARROW", "outcome → T3"),
+    ("full table scan on 8 million rows",             "NARROW", "specific → T3"),
 
-    # Thread 4 — Deployment v3.0 (2)
-    ("version 3.0 production deploy",         "NARROW",  "exact → T4"),
-    ("QA status after v3 release",            "NARROW",  "specific → T4"),
+    # ── Thread 4 — DB migration rollback after failed deploy ──────────────
+    ("database migration rollback in prod",           "NARROW", "exact → T4"),
+    ("flask db downgrade after failed migration",     "NARROW", "specific → T4"),
+    ("FK constraint failed on add_user_preferences",  "NARROW", "exact detail → T4"),
+    ("prod inconsistent state after migration",       "NARROW", "rephrased → T4"),
+    ("migration caused 4 minute downtime",            "NARROW", "specific outcome → T4"),
 
-    # Thread 5 — Dashboard Performance (3)
-    ("Dashboard loading slow",                "NARROW",  "exact → T5"),
-    ("why dashboard slow today",              "NARROW",  "casual → T5"),
-    ("dashbord slow",                         "NARROW",  "typo → T5"),
+    # ── Thread 5 — GitHub Actions build timeout ───────────────────────────
+    ("GitHub Actions build timing out",               "NARROW", "exact → T5"),
+    ("test suite jumped from 4 to 22 minutes",        "NARROW", "specific → T5"),
+    ("pytest parallel runners fix CI",                "NARROW", "specific → T5"),
+    ("split tests across matrix partitions",          "NARROW", "specific → T5"),
+    ("integration tests slowing down pipeline",       "NARROW", "rephrased → T5"),
 
-    # Thread 6 — Multi-Bug Release (1)
-    ("file upload bug in latest release",     "NARROW",  "specific → T6"),
+    # ── Thread 6 — Docker image size ballooning ───────────────────────────
+    ("Docker image grew from 280MB to 1GB",           "NARROW", "exact → T6"),
+    ("node_modules copied into Docker final stage",   "NARROW", "specific → T6"),
+    ("multi-stage build to reduce image size",        "NARROW", "specific → T6"),
+    ("docekr image too big after charting library",   "NARROW", "typo → T6"),
+    ("frontend image bloated in CI",                  "NARROW", "rephrased → T6"),
 
-    # Thread 7 — CI/CD Pipeline (3)
-    ("CI pipeline broken",                    "NARROW",  "exact → T7"),
-    ("ESLint config migration",               "NARROW",  "specific detail → T7"),
-    ("linter update broke the build",         "NARROW",  "rephrased → T7"),
+    # ── Thread 7 — React hydration mismatch errors ────────────────────────
+    ("React hydration mismatch in production",        "NARROW", "exact → T7"),
+    ("SSR hydration error on product detail page",    "NARROW", "specific → T7"),
+    ("Intl.NumberFormat different server vs client",  "NARROW", "specific → T7"),
+    ("currency formatting causing hydration bug",     "NARROW", "rephrased → T7"),
 
-    # Thread 8 — Pagination (3)
-    ("Cursor pagination implementation",      "NARROW",  "exact → T8"),
-    ("cursr pagination",                      "NARROW",  "typo → T8"),
-    ("cursor-based pagination for large datasets", "NARROW", "expanded → T8"),
+    # ── Thread 8 — Memory leak in background worker ───────────────────────
+    ("worker pod OOMKilled every 6 hours",            "NARROW", "exact → T8"),
+    ("memory leak in background worker",              "NARROW", "exact → T8"),
+    ("memray profiling found closure holding DataFrame", "NARROW", "specific → T8"),
+    ("retry queue caching full response payloads",    "NARROW", "specific → T8"),
+    ("RSS memory growing linearly in worker",         "NARROW", "specific → T8"),
 
-    # Thread 9 — Caching / Redis (3)
-    ("Redis caching setup",                   "NARROW",  "exact → T9"),
-    ("redis",                                 "NARROW",  "keyword → T9"),
-    ("caching API responses to reduce DB queries", "NARROW", "rephrased → T9"),
+    # ── Thread 9 — Dependency vulnerability in lodash ────────────────────
+    ("lodash CVE prototype pollution",                "NARROW", "exact → T9"),
+    ("Dependabot flagged lodash vulnerability",       "NARROW", "exact → T9"),
+    ("upgrading lodash to 4.17.21",                  "NARROW", "specific → T9"),
+    ("npm audit fix lodash packages",                 "NARROW", "specific → T9"),
+    ("lodash-es to replace vulnerable lodash",        "NARROW", "specific → T9"),
 
-    # Thread 10 — Offsite (1)
-    ("team offsite plans next month",         "NARROW",  "exact → T10"),
+    # ── Thread 10 — Exposed API keys in git history ───────────────────────
+    ("AWS API key committed to git repo",             "NARROW", "exact → T10"),
+    ("SES sender key exposed in commit a3f99bx",      "NARROW", "exact detail → T10"),
+    ("git filter-repo to purge secrets from history", "NARROW", "specific → T10"),
+    ("rotating compromised AWS credentials",          "NARROW", "rephrased → T10"),
+    ("detect-secrets pre-commit hook added",          "NARROW", "specific outcome → T10"),
 
-    # Thread 11 — DB Migration (2)
-    ("Database schema migration",             "NARROW",  "exact → T11"),
-    ("ALTER TABLE backup for user profiles",  "NARROW",  "specific → T11"),
+    # ── Thread 11 — Redis cache eviction causing slowdowns ────────────────
+    ("Redis cache hit rate dropped from 94 to 31",    "NARROW", "exact → T11"),
+    ("allkeys-lru eviction too aggressive",           "NARROW", "specific → T11"),
+    ("Redis memory at 99 percent used",               "NARROW", "specific → T11"),
+    ("gzip compress large API responses in Redis",    "NARROW", "specific → T11"),
+    ("cahce eviction slowing down API",               "NARROW", "typo → T11"),
 
-    # Thread 12 — Security (2)
-    ("XSS vulnerability in search",           "NARROW",  "exact → T12"),
-    ("sanitize inputs to prevent XSS",        "NARROW",  "rephrased → T12"),
+    # ── Thread 12 — Kubernetes pod crash loop ────────────────────────────
+    ("api-gateway pod in CrashLoopBackOff",           "NARROW", "exact → T12"),
+    ("Kubernetes pod OOMKilled in prod",              "NARROW", "exact → T12"),
+    ("increase memory limit from 256Mi to 512Mi",     "NARROW", "specific → T12"),
+    ("pod memory limit too low after feature",        "NARROW", "rephrased → T12"),
 
-    # ═══════════════════════════════════════════════════════════
-    #  AMBIGUOUS (30) — 2-3 threads plausibly relevant
-    # ═══════════════════════════════════════════════════════════
+    # ── Thread 13 — Sprint planning for Q2 ───────────────────────────────
+    ("Q2 sprint planning estimates in Jira",          "NARROW", "exact → T13"),
+    ("submit story point estimates by Friday",        "NARROW", "specific → T13"),
+    ("sprint scope locked for Q2",                    "NARROW", "specific outcome → T13"),
 
-    # Moved from NARROW — borderline / cross-thread queries
-    ("database connection pool problem",      "AMBIGUOUS", "T2 specific but DB → T5/T11"),
-    ("intermittent timeouts on API endpoints","AMBIGUOUS", "T2 but phrasing broader"),
-    ("monitoring logs after deployment",      "AMBIGUOUS", "T4 deploy + monitoring overlap"),
-    ("missing index on users table",          "AMBIGUOUS", "T5 perf but users table → T11"),
-    ("query performance on users table",      "AMBIGUOUS", "T5 but users table → T11"),
-    ("duplicate search results after release","AMBIGUOUS", "T6 bug + release → T4"),
-    ("multiple bugs introduced in release",   "AMBIGUOUS", "T6 bugs + release → T4"),
-    ("pagination",                            "AMBIGUOUS", "keyword T8 but mentioned in T2"),
-    ("pre-commit hook for code quality",      "AMBIGUOUS", "T7 CI but code quality → T3"),
-    ("redis caching not working?",            "AMBIGUOUS", "T9 cache + issue framing → T2"),
+    # ── Thread 14 — On-call handoff issues ───────────────────────────────
+    ("on-call handoff notes were incomplete",         "NARROW", "exact → T14"),
+    ("no runbook for S3 timeout incident",            "NARROW", "specific → T14"),
+    ("document search index rebuild procedure",       "NARROW", "specific → T14"),
+    ("runbook required before closing incident",      "NARROW", "specific outcome → T14"),
 
-    # Moved from BROAD — partial thread focus (2-3 threads)
-    ("deployment",                            "AMBIGUOUS", "mainly T4 but also T6"),
-    ("API bug after deployment",              "AMBIGUOUS", "T2+T4 focused"),
-    ("recent bug fixes",                      "AMBIGUOUS", "T1+T6 focused"),
-    ("documentation and API updates",         "AMBIGUOUS", "T2+T3 focused"),
-    ("production monitoring and error fixes", "AMBIGUOUS", "T2+T4+T5 focused"),
-    ("API improvements",                      "AMBIGUOUS", "T2+T3 moderate focus"),
-    ("Bugs and performance problems",         "AMBIGUOUS", "T5+T6 moderate focus"),
-    ("Infrastructure and DevOps work",        "AMBIGUOUS", "T4+T7 moderate focus"),
-    ("pipeline and deploy updates",           "AMBIGUOUS", "T4+T7 moderate focus"),
-    ("error fixing and patches",              "AMBIGUOUS", "T1+T6+T12 partial focus"),
-
-    # New — designed 2-3 thread ambiguity
-    ("API issues and documentation",          "AMBIGUOUS", "T2+T3 overlap"),
-    ("OAuth and security concerns",           "AMBIGUOUS", "T1+T12 overlap"),
-    ("deployment and release issues",         "AMBIGUOUS", "T4+T6 overlap"),
-    ("database table changes",               "AMBIGUOUS", "T5+T11 overlap"),
-    ("build and CI pipeline issues",          "AMBIGUOUS", "T7+T4 overlap"),
-    ("API timeout and caching",               "AMBIGUOUS", "T2+T9 overlap"),
-    ("search bugs and vulnerabilities",       "AMBIGUOUS", "T6+T12 overlap"),
-    ("user data migration issues",            "AMBIGUOUS", "T11+T5 overlap"),
-    ("release stability concerns",            "AMBIGUOUS", "T4+T6 overlap"),
-    ("pagination and API performance",        "AMBIGUOUS", "T8+T2 overlap"),
-
-    # ═══════════════════════════════════════════════════════════
-    #  BROAD (30) — query spans many threads
-    # ═══════════════════════════════════════════════════════════
-
-    ("security issue",                        "BROAD",   "vague → T12 + others"),
-    ("System upgrades",                       "BROAD",   "vague → T4+T6"),
-    ("API issue after deployment",            "BROAD",   "mixed → T2+T4+T6"),
-    ("Production issues this week",           "BROAD",   "vague → T2+T4+T6"),
-    ("login",                                 "BROAD",   "keyword → T1+others"),
-    ("deploy broke api again",               "BROAD",   "casual → T4+T2"),
-    ("database work this sprint",             "BROAD",   "vague → T2+T5+T11"),
-    ("what went wrong in production",         "BROAD",   "vague → T2+T4+T6"),
-    ("backend infrastructure changes",        "BROAD",   "mixed → T4+T7+T9+T11"),
-    ("security and stability fixes",          "BROAD",   "mixed → T1+T6+T12"),
-    ("release status update",                 "BROAD",   "mixed → T4+T6"),
-    ("what is everyone working on",           "BROAD",   "vague → all threads"),
-    ("database performance and migration",    "BROAD",   "mixed → T5+T11"),
-    ("code quality and tooling",              "BROAD",   "mixed → T3+T7"),
-    ("recent engineering decisions",          "BROAD",   "vague → multiple"),
-    ("API problems this quarter",             "BROAD",   "vague → T2+T3+T6"),
-    ("configuration changes recently",        "BROAD",   "mixed → T1+T7"),
-    ("bug",                                   "BROAD",   "keyword → T1+T6+T12"),
-    ("fixes",                                 "BROAD",   "keyword → multiple"),
-    ("API and database issues",               "BROAD",   "mixed → T2+T5+T11"),
-    ("testing and QA work",                   "BROAD",   "mixed → T4+T7"),
-    ("performance improvements this sprint",  "BROAD",   "mixed → T5+T9"),
-    ("endpoint changes and updates",          "BROAD",   "mixed → T2+T3+T8"),
-    ("weekly engineering summary",            "BROAD",   "vague → all threads"),
-    ("server and database problems",          "BROAD",   "mixed → T2+T5+T11"),
-    ("API response time improvements",        "BROAD",   "mixed → T2+T5+T9"),
-    ("schema and table modifications",        "BROAD",   "mixed → T5+T11"),
-    ("what needs attention this week",        "BROAD",   "vague → multiple"),
-    ("development workflow changes",          "BROAD",   "mixed → T4+T7"),
-    ("recurring technical issues",            "BROAD",   "vague → T2+T5+T6"),
+    # ── Thread 15 — Push notifications not delivered on iOS ──────────────
+    ("iOS push notifications failing for 20 percent of users", "NARROW", "exact → T15"),
+    ("APNs certificate expiring in 2 days",           "NARROW", "specific → T15"),
+    ("push delivery rate back to 98 after cert renewal", "NARROW", "outcome → T15"),
+    ("ios push not being deliivered",                 "NARROW", "typo → T15"),
 
     # ═══════════════════════════════════════════════════════════
-    #  REJECT (30) — no thread is a good match
+    #  AMBIGUOUS — plausibly 2 threads
     # ═══════════════════════════════════════════════════════════
+    ("login not working in production",               "AMBIGUOUS", "T1 + T2 both auth"),
+    ("authentication broken",                         "AMBIGUOUS", "T1 + T2 both auth"),
+    ("OAuth or login issue",                          "AMBIGUOUS", "T1 + T2"),
+    ("database performance problem",                  "AMBIGUOUS", "T3 slow queries + T11 Redis"),
+    ("database issue after deploy",                   "AMBIGUOUS", "T3 + T4 both DB"),
+    ("security vulnerability found in dependency",    "AMBIGUOUS", "T9 lodash + T10 key exposure"),
+    ("secret or credential issue",                    "AMBIGUOUS", "T1 stale secret + T10 exposed key"),
+    ("API response latency issue",                    "AMBIGUOUS", "T3 orders slow + T11 cache miss"),
+    ("CI build or Docker issue",                      "AMBIGUOUS", "T5 GH Actions + T6 Docker"),
+    ("memory or OOM problem",                         "AMBIGUOUS", "T8 worker + T12 k8s pod"),
+    ("pod or worker crashing",                        "AMBIGUOUS", "T8 + T12 both OOM"),
+    ("credentials rotation needed",                   "AMBIGUOUS", "T1 client_secret + T10 AWS key"),
 
-    ("New features discussion",               "REJECT",  "no features thread"),
-    ("Mobile app design",                     "REJECT",  "no mobile threads"),
-    ("Machine learning model training",       "REJECT",  "no ML threads"),
-    ("Kubernetes pod autoscaling policy",     "REJECT",  "no k8s threads"),
-    ("React component rendering issues",      "REJECT",  "no React threads"),
-    ("hiring senior backend engineers",       "REJECT",  "no hiring threads"),
-    ("customer satisfaction survey results",  "REJECT",  "no customer threads"),
-    ("marketing campaign performance",        "REJECT",  "no marketing threads"),
-    ("quarterly revenue forecast",            "REJECT",  "no finance threads"),
-    ("iOS app crash on startup",              "REJECT",  "no iOS threads"),
-    ("Android notification delivery failure", "REJECT",  "no Android threads"),
-    ("data warehouse ETL pipeline",           "REJECT",  "no ETL threads"),
-    ("blockchain consensus mechanism",        "REJECT",  "no blockchain threads"),
-    ("Figma design system components",        "REJECT",  "no design threads"),
-    ("AWS S3 bucket permissions",             "REJECT",  "no AWS threads"),
-    ("Docker image size optimization",        "REJECT",  "no Docker threads"),
-    ("GraphQL schema design patterns",        "REJECT",  "no GraphQL threads"),
-    ("Stripe payment integration",            "REJECT",  "no payment threads"),
-    ("email template redesign",               "REJECT",  "no email threads"),
-    ("video transcoding latency",             "REJECT",  "no video threads"),
-    ("product roadmap next quarter",          "REJECT",  "no roadmap threads"),
-    ("SSL certificate renewal",               "REJECT",  "no SSL threads"),
-    ("VPN tunnel setup guide",                "REJECT",  "no VPN threads"),
-    ("Kafka consumer rebalancing issues",     "REJECT",  "no Kafka threads"),
-    ("Terraform state file management",       "REJECT",  "no Terraform threads"),
-    ("Python virtual environment setup",      "REJECT",  "no Python env threads"),
-    ("DNS propagation delay",                 "REJECT",  "no DNS threads"),
-    ("JIRA workflow customization",           "REJECT",  "no JIRA threads"),
-    ("load balancer sticky sessions",         "REJECT",  "no LB threads"),
-    ("Webpack bundle size optimization",      "REJECT",  "no Webpack threads"),
+    # ═══════════════════════════════════════════════════════════
+    #  BROAD — spans many threads
+    # ═══════════════════════════════════════════════════════════
+    ("what security issues did we have",              "BROAD", "T9 + T10 + T1"),
+    ("recent production incidents",                   "BROAD", "T4 + T8 + T11 + T12"),
+    ("any database problems lately",                  "BROAD", "T3 + T4 + T11"),
+    ("performance issues in the system",              "BROAD", "T3 + T8 + T11 + T12"),
+    ("deployment or build problems",                  "BROAD", "T4 + T5 + T6"),
+    ("infrastructure issues",                         "BROAD", "T8 + T11 + T12"),
+    ("what engineering work happened this week",      "BROAD", "all threads"),
+    ("any incidents or outages",                      "BROAD", "T4 + T8 + T11 + T12"),
+    ("team updates and process changes",              "BROAD", "T13 + T14"),
+    ("auth or security problems",                     "BROAD", "T1 + T2 + T9 + T10"),
+
+    # ═══════════════════════════════════════════════════════════
+    #  REJECT — no thread is a good match
+    # ═══════════════════════════════════════════════════════════
+    ("quarterly revenue forecasting",                 "REJECT", "no finance threads"),
+    ("machine learning model training",               "REJECT", "no ML threads"),
+    ("Figma design system components",                "REJECT", "no design threads"),
+    ("hiring plan for Q3",                            "REJECT", "no hiring threads"),
+    ("Stripe payment gateway integration",            "REJECT", "no payments threads"),
+    ("GraphQL subscription setup",                    "REJECT", "no GraphQL threads"),
+    ("Terraform provider configuration",              "REJECT", "no Terraform threads"),
+    ("Kafka consumer group lag",                      "REJECT", "no Kafka threads"),
+    ("DNS TTL configuration",                         "REJECT", "no DNS threads"),
+    ("video streaming latency",                       "REJECT", "no video threads"),
 ]
 
 
@@ -435,6 +416,22 @@ def run_benchmark():
     print(f"\n  Population stats (for z-score normalisation):")
     for k, v in pop_stats.items():
         print(f"    {k:<20} = {v:.4f}")
+
+    # ── Write parameters.json for ranking.py ──
+    import json as _json
+    params = {
+        "Z_REL_GAP_HIGH":    Z_REL_GAP_HIGH,
+        "Z_ENTROPY_LOW":     Z_ENTROPY_LOW,
+        "Z_REL_GAP_AMB_LO":  Z_REL_GAP_AMB_LO,
+        "Z_REL_GAP_AMB_HI":  Z_REL_GAP_AMB_HI,
+        "Z_ENTROPY_AMB_LO":  Z_ENTROPY_AMB_LO,
+        "Z_ENTROPY_AMB_HI":  Z_ENTROPY_AMB_HI,
+        "Z_SIGNAL_BROAD":    Z_SIGNAL_BROAD,
+        **pop_stats,
+    }
+    with open("parameters.json", "w") as f:
+        _json.dump(params, f, indent=2)
+    print("  Saved parameters.json")
 
     for m in all_results:
         m['predicted'] = decide(m, pop_stats)
