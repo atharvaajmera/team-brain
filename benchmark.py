@@ -1,4 +1,9 @@
-﻿import sys, math
+﻿import argparse
+import json
+import math
+import os
+import sys
+from datetime import datetime, timezone
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, LabelEncoder
@@ -19,6 +24,9 @@ Z_REL_GAP_AMB_HI =  1.00   # AMBIGUOUS: z(rel_gap) below this
 Z_ENTROPY_AMB_LO = -1.00   # AMBIGUOUS: z(entropy) above this
 Z_ENTROPY_AMB_HI =  0.50   # AMBIGUOUS: z(entropy) below this
 Z_SIGNAL_BROAD   =  1.50   # BROAD: z(signal_norm) above this
+
+DEFAULT_QUERIES_FILE = "benchmark_queries.json"
+DEFAULT_PARAMS_FILE = "parameters.json"
 
 
 def _group_threads(candidates):
@@ -160,6 +168,125 @@ def compute_population_stats(all_metrics):
         'signal_norm_std':  float(np.std(signal_norms)) if len(signal_norms) > 1 else 1.0,
     }
 
+def _safe_percentiles(values):
+    if not values:
+        return {
+            'p10': 0.0,
+            'p25': 0.0,
+            'p50': 0.0,
+            'p75': 0.0,
+            'p90': 0.0,
+        }
+    arr = np.array(values)
+    return {
+        'p10': float(np.percentile(arr, 10)),
+        'p25': float(np.percentile(arr, 25)),
+        'p50': float(np.percentile(arr, 50)),
+        'p75': float(np.percentile(arr, 75)),
+        'p90': float(np.percentile(arr, 90)),
+    }
+
+
+def _extract_query_text(item):
+    if isinstance(item, str):
+        return item.strip()
+
+    if isinstance(item, (list, tuple)) and item:
+        return str(item[0]).strip()
+
+    if isinstance(item, dict):
+        for key in ('query', 'text', 'q'):
+            val = item.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+
+    return ''
+
+
+def _load_queries_from_file(path):
+    if not os.path.exists(path):
+        return []
+
+    with open(path, encoding='utf-8') as f:
+        data = json.load(f)
+
+    if not isinstance(data, list):
+        raise ValueError(f"Expected a JSON list in {path}")
+
+    queries = []
+    for item in data:
+        q = _extract_query_text(item)
+        if q:
+            queries.append(q)
+    return queries
+
+
+def calibrate_parameters(queries, with_filter=False):
+    all_metrics = []
+    total = len(queries)
+
+    for i, query in enumerate(queries, start=1):
+        intent = analyze_query_intent(query)
+        candidates = retrieve_candidates(query, intent, with_filter=with_filter)
+        if not candidates:
+            print(f"[{i}/{total}] skipped (no candidates): {query}")
+            continue
+
+        m = compute_metrics(candidates)
+        all_metrics.append(m)
+        print(f"[{i}/{total}] ok: {query}")
+
+    if not all_metrics:
+        raise RuntimeError('Calibration failed: no queries produced retrieval metrics.')
+
+    pop_stats = compute_population_stats(all_metrics)
+
+    rel_gaps = [m.get('rel_gap') for m in all_metrics if isinstance(m.get('rel_gap'), (int, float))]
+    entropies = [m['ent_score_T0.1'] for m in all_metrics]
+    signal_norms = [m['signal'] / m['std_distance'] if m['std_distance'] > 0 else 0.0 for m in all_metrics]
+
+    params = {
+        'generated_at_utc': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+        'calibration_queries_total': total,
+        'calibration_queries_used': len(all_metrics),
+
+        # Decision thresholds (kept explicit in file for runtime transparency)
+        'Z_REL_GAP_HIGH': Z_REL_GAP_HIGH,
+        'Z_ENTROPY_LOW': Z_ENTROPY_LOW,
+        'Z_REL_GAP_AMB_LO': Z_REL_GAP_AMB_LO,
+        'Z_REL_GAP_AMB_HI': Z_REL_GAP_AMB_HI,
+        'Z_ENTROPY_AMB_LO': Z_ENTROPY_AMB_LO,
+        'Z_ENTROPY_AMB_HI': Z_ENTROPY_AMB_HI,
+        'Z_SIGNAL_BROAD': Z_SIGNAL_BROAD,
+
+        # Population means/std for z-normalization
+        **pop_stats,
+
+        # Percentiles for diagnostics/tuning
+        'rel_gap_percentiles': _safe_percentiles(rel_gaps),
+        'entropy_percentiles': _safe_percentiles(entropies),
+        'signal_norm_percentiles': _safe_percentiles(signal_norms),
+    }
+
+    return params
+
+
+def write_parameters(params, output_path):
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(params, f, indent=2)
+        f.write('\n')
+
+
+def _build_arg_parser():
+    parser = argparse.ArgumentParser(
+        description='Offline benchmark calibration: query -> retrieve -> metrics -> parameters.json'
+    )
+    parser.add_argument('--queries-file', default=DEFAULT_QUERIES_FILE, help='JSON file containing query list')
+    parser.add_argument('--query', action='append', default=[], help='Inline query (repeatable)')
+    parser.add_argument('--output', default=DEFAULT_PARAMS_FILE, help='Output JSON parameter file')
+    parser.add_argument('--with-filter', action='store_true', help='Use temporal filter during retrieval')
+    return parser
+
 
 def decide(m, pop_stats):
     """4-class decision with z-normalised thresholds: NARROW -> AMBIGUOUS -> BROAD -> REJECT."""
@@ -240,6 +367,26 @@ def run_logreg_loo(all_results):
 
 
 if __name__ == "__main__":
-    # TODO: auto-generate queries from ChromaDB using IR techniques,
-    # run retrieval + classification, compute pop_stats, write parameters.json
-    pass
+    parser = _build_arg_parser()
+    args = parser.parse_args()
+
+    file_queries = _load_queries_from_file(args.queries_file)
+    cli_queries = [q.strip() for q in args.query if q and q.strip()]
+    queries = file_queries + cli_queries
+
+    if not queries:
+        print(
+            "No queries provided. Add queries in benchmark_queries.json "
+            "or pass --query multiple times."
+        )
+        sys.exit(1)
+
+    params = calibrate_parameters(queries, with_filter=args.with_filter)
+    write_parameters(params, args.output)
+
+    print(f"\nWrote calibration parameters to {args.output}")
+    print(
+        "Used "
+        f"{params['calibration_queries_used']}/{params['calibration_queries_total']} "
+        "queries for population stats."
+    )
