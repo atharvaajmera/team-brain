@@ -1,0 +1,32 @@
+[
+  {
+    "query": "oauth token refresh returning 401 in staging",
+    "expected": "NARROW",
+    "desc": "OAuth refresh issue in T1"
+  },
+  {
+    "query": "what api issues are we seeing",
+    "expected": "AMBIGUOUS",
+    "desc": "General API discussions spanning T1 and T2"
+  },
+  {
+    "query": "give me all recent updates across teams",
+    "expected": "BROAD",
+    "desc": "Broad updates across T4, T7, T10"
+  },
+  {
+    "query": "what did we decide for sprint capacity",
+    "expected": "NARROW",
+    "desc": "Sprint planning notes in T10"
+  },
+  {
+    "query": "latest redis cache and performance discussion",
+    "expected": "NARROW",
+    "desc": "Caching thread T9"
+  },
+  {
+    "query": "tell me details about a random movie release",
+    "expected": "REJECT",
+    "desc": "No matching engineering thread"
+  }
+]

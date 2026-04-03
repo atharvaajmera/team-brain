@@ -4,6 +4,12 @@ import math
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, LabelEncoder
@@ -25,8 +31,8 @@ Z_ENTROPY_AMB_LO = -1.00   # AMBIGUOUS: z(entropy) above this
 Z_ENTROPY_AMB_HI =  0.50   # AMBIGUOUS: z(entropy) below this
 Z_SIGNAL_BROAD   =  1.50   # BROAD: z(signal_norm) above this
 
-DEFAULT_QUERIES_FILE = "benchmark_queries.json"
-DEFAULT_PARAMS_FILE = "parameters.json"
+DEFAULT_QUERIES_FILE = str(REPO_ROOT / "config" / "benchmark_queries.json")
+DEFAULT_PARAMS_FILE = str(REPO_ROOT / "config" / "parameters.json")
 
 
 def _group_threads(candidates):

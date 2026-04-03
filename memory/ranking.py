@@ -52,7 +52,7 @@ MAX_BROAD_THREADS = 3
 MAX_AMBIGUOUS_THREADS = 2
 MIN_THREAD_SIZE = 2
 
-_PARAMS_PATH = "./parameters.json"
+_PARAMS_PATH = str(_os.path.join(_os.path.dirname(_os.path.dirname(__file__)), "config", "parameters.json"))
 
 # Fallback defaults — used when parameters.json doesn't exist yet.
 _DEFAULTS = {

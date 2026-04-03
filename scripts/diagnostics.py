@@ -1,13 +1,21 @@
-import re, sys, math
+import re, sys, math, json
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import numpy as np
 from memory.storage import collection
 from memory.retrieval import retrieve_candidates
 from memory.intent import analyze_query_intent
-from benchmark import (
-    TEST_QUERIES, compute_metrics, decide, compute_population_stats,
+from scripts.benchmark import (
+    compute_metrics, decide, compute_population_stats,
     _group_threads, run_logreg_loo, extract_features, FEATURE_KEYS,
     MIN_THREAD_SIZE,
 )
+
+DEFAULT_TEST_QUERIES_FILE = REPO_ROOT / "config" / "diagnostics_queries.json"
 
 
 THREAD_MAP = {
@@ -62,12 +70,43 @@ def _rank_threads(candidates):
         agg_sorted = multi
     return [str(int(float(t['thread_id']))) for t in agg_sorted]
 
+
+def _load_test_queries(path=DEFAULT_TEST_QUERIES_FILE):
+    if not path.exists():
+        return []
+
+    with open(path, encoding='utf-8') as f:
+        data = json.load(f)
+
+    if not isinstance(data, list):
+        raise ValueError(f"Expected JSON list in {path}")
+
+    queries = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        query = str(item.get('query', '')).strip()
+        expected = str(item.get('expected', '')).strip().upper()
+        desc = str(item.get('desc', '')).strip()
+        if not query or not expected:
+            continue
+        queries.append((query, expected, desc))
+    return queries
+
 def run_error_analysis():
-    print("  ERROR ANALYSIS — Recall@5 · MRR · failure categorisation")
+    print("  ERROR ANALYSIS - Recall@5 | MRR | failure categorisation")
+
+    test_queries = _load_test_queries()
+    if not test_queries:
+        print(
+            "  No diagnostics query set found. Add labeled queries to "
+            f"{DEFAULT_TEST_QUERIES_FILE} and re-run."
+        )
+        return
 
     all_results = []
 
-    for query, expected, desc in TEST_QUERIES:
+    for query, expected, desc in test_queries:
         intent = analyze_query_intent(query)
         candidates = retrieve_candidates(query, intent, with_filter=False)
         if not candidates:
@@ -107,7 +146,7 @@ def run_error_analysis():
     for m in all_results:
         r5  = f"{m['recall_5']}" if m['recall_5'] is not None else "N/A"
         mrr = f"{m['mrr']:.2f}" if m['mrr'] is not None else "N/A"
-        exp_t = ",".join(_tid_label(t) for t in m['expected_threads']) or "—"
+        exp_t = ",".join(_tid_label(t) for t in m['expected_threads']) or "-"
         top5  = ",".join(_tid_label(t) for t in m['ranked_threads'][:5])
         print(f"  {m['query'][:33]:<35} {m['expected']:<10} {m['predicted']:<10} "
               f"{m['lr_predicted']:<10} {r5:>8} {mrr:>6}  {exp_t:<18} {top5:<18}")
@@ -134,7 +173,7 @@ def run_error_analysis():
 
 
 def _print_error_cases(all_results, pred_key, name):
-    print(f"  ERROR CASES — {name}")
+    print(f"  ERROR CASES - {name}")
 
     wrong = [m for m in all_results if m[pred_key] != m['expected']]
     case1, case2 = [], []
@@ -148,12 +187,12 @@ def _print_error_cases(all_results, pred_key, name):
         else:
             case2.append(m)
 
-    print(f"\n  CASE 1 — Retrieval failed ({len(case1)} queries)")
-    print(f"  {'(expected thread NOT in top-5 → classifier had no chance)'}")
+    print(f"\n  CASE 1 - Retrieval failed ({len(case1)} queries)")
+    print("  (expected thread NOT in top-5 -> classifier had no chance)")
     if case1:
         print(f"  {'Query':<35} {'Expected':<10} {'Predicted':<10} {'MRR':>6}  {'Exp.Threads':<16} {'Top-5':<18}")
         for m in case1:
-            exp_t = ",".join(_tid_label(t) for t in m['expected_threads']) or "—"
+            exp_t = ",".join(_tid_label(t) for t in m['expected_threads']) or "-"
             top5  = ",".join(_tid_label(t) for t in m['ranked_threads'][:5])
             mrr   = f"{m['mrr']:.2f}" if m['mrr'] is not None else "N/A"
             print(f"  {m['query'][:33]:<35} {m['expected']:<10} {m[pred_key]:<10} "
@@ -161,12 +200,12 @@ def _print_error_cases(all_results, pred_key, name):
     else:
         print("  (none)")
 
-    print(f"\n  CASE 2 — Retrieval correct, classifier failed ({len(case2)} queries)")
-    print(f"  {'(expected thread IS in top-5, but label was wrong)'}")
+    print(f"\n  CASE 2 - Retrieval correct, classifier failed ({len(case2)} queries)")
+    print("  (expected thread IS in top-5, but label was wrong)")
     if case2:
         print(f"  {'Query':<35} {'Expected':<10} {'Predicted':<10} {'MRR':>6}  {'Exp.Threads':<16} {'Top-5':<18}")
         for m in case2:
-            exp_t = ",".join(_tid_label(t) for t in m['expected_threads']) or "—"
+            exp_t = ",".join(_tid_label(t) for t in m['expected_threads']) or "-"
             top5  = ",".join(_tid_label(t) for t in m['ranked_threads'][:5])
             mrr   = f"{m['mrr']:.2f}" if m['mrr'] is not None else "N/A"
             print(f"  {m['query'][:33]:<35} {m['expected']:<10} {m[pred_key]:<10} "
@@ -175,7 +214,7 @@ def _print_error_cases(all_results, pred_key, name):
         print("  (none)")
 
     total_wrong = len(wrong)
-    print(f"\n  SUMMARY — {name}:")
+    print(f"\n  SUMMARY - {name}:")
     print(f"    Total errors:                 {total_wrong}/{len(all_results)}")
     if total_wrong:
         print(f"    CASE 1 (retrieval failed):    {len(case1)}/{total_wrong} "
