@@ -13,6 +13,19 @@ ssl_context = ssl.create_default_context(cafile=certifi.where())
 
 client= WebClient(token=SLACK_BOT_TOKEN,ssl=ssl_context)
 
+
+def _is_system_message(text):
+    text = (text or "").lower()
+    return any(phrase in text for phrase in [
+        "joined the channel",
+        "left the channel",
+        "has joined",
+        "has left",
+        "added to the channel",
+        "removed from the channel",
+    ])
+
+
 def _get_author(msg):
     """Return the human-readable author name.
     For messages posted by the generator, reads from metadata.event_payload.author.
@@ -32,7 +45,10 @@ def get_threads_from_channel(channel_id, limit=10):
             limit=limit,
             include_all_metadata=True,
         )
-        messages=response['messages']
+        messages = [
+            msg for msg in response['messages']
+            if not _is_system_message(msg.get('text', ''))
+        ]
         for msg in messages:
             author = _get_author(msg)
             print(f"User: {author}, Text: {msg.get('text')}")
@@ -45,7 +61,10 @@ def get_threads_from_channel(channel_id, limit=10):
                     ts=thread_ts,
                     include_all_metadata=True,
                 )
-                replies = replies_response['messages'][1:]  
+                replies = [
+                    reply for reply in replies_response['messages'][1:]
+                    if not _is_system_message(reply.get('text', ''))
+                ]
                 for reply in replies:
                     reply_author = _get_author(reply)
                     print(f"  Reply from User: {reply_author}, Text: {reply.get('text')}")

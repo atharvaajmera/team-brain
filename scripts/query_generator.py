@@ -17,7 +17,7 @@ DEFAULT_MIN_PER_THREAD = 5
 DEFAULT_MAX_PER_THREAD = 10
 
 STOPWORDS = {
-    "about", "after", "again", "against", "also", "another", "any", "are", "back",
+    "the","about", "after", "again", "against", "also", "another", "any", "are", "back",
     "because", "been", "before", "being", "between", "both", "but", "could",
     "does", "doing", "down", "during", "each", "even", "from", "further", "have",
     "having", "into", "its", "just", "more", "most", "only", "other", "over",
