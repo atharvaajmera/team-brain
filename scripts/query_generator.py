@@ -132,36 +132,99 @@ def _score_token(token, representative_text):
     return score
 
 
-def _generate_queries_from_tokens(tokens, min_queries, max_queries, representative_text):
-    unique_tokens = []
-    seen = set()
+def _rank_tokens(tokens, representative_text):
+    token_counts = defaultdict(int)
     for token in tokens:
-        if token not in seen:
-            unique_tokens.append(token)
-            seen.add(token)
+        token_counts[token] += 1
 
     ranked_tokens = sorted(
-        unique_tokens,
-        key=lambda token: (-_score_token(token, representative_text), token),
+        token_counts,
+        key=lambda token: (
+            -(token_counts[token] * 2 + _score_token(token, representative_text)),
+            token,
+        ),
     )
+    return ranked_tokens, token_counts
 
-    selected = ranked_tokens[:8]
+
+def _generate_queries_from_tokens(thread_id, tokens, min_queries, max_queries, representative_text):
+    ranked_tokens, token_counts = _rank_tokens(tokens, representative_text)
+
+    selected = ranked_tokens[:min(10, len(ranked_tokens))]
     if len(selected) < 2:
+        print(f"Skipping thread {thread_id}: insufficient tokens")
         return []
 
     queries = []
     seen_queries = set()
 
-    for size in (3, 2, 4):
-        for combo in combinations(selected, size):
-            query = " ".join(combo).strip()
-            if query and query not in seen_queries:
-                queries.append(query)
-                seen_queries.add(query)
-            if len(queries) >= max_queries:
+    def add_query(query):
+        query = " ".join(query.split()).strip()
+        if query and query not in seen_queries:
+            queries.append(query)
+            seen_queries.add(query)
+            return len(queries) >= max_queries
+        return False
+
+    top_tokens = selected[:5]
+    strong_tokens = [token for token in top_tokens if token_counts[token] > 1 or token in TECH_WORDS]
+    if len(strong_tokens) < 2:
+        strong_tokens = top_tokens
+
+    for size in (2, 3, 4):
+        for combo in combinations(top_tokens, size):
+            if add_query(" ".join(combo)):
                 return queries
 
-    return queries[:max(min_queries, 0)]
+    for combo in combinations(strong_tokens[:4], 2):
+        t1, t2 = combo
+        for template in (
+            f"{t1} {t2} issue",
+            f"{t1} {t2} failing",
+            f"{t1} problem {t2}",
+            f"{t1} broken",
+            f"{t2} problem",
+            f"{t1} not working",
+        ):
+            if add_query(template):
+                return queries
+
+    for token in strong_tokens[:2]:
+        for template in (
+            f"{token} issue",
+            f"{token} failing",
+            f"{token} broken",
+            f"{token} problem",
+        ):
+            if add_query(template):
+                return queries
+
+    for token in selected[:2]:
+        if add_query(token):
+            return queries
+
+    for size in (3, 2, 4):
+        for combo in combinations(selected, size):
+            query = " ".join(reversed(combo))
+            if add_query(query):
+                return queries
+
+    if len(queries) < min_queries:
+        for combo in combinations(selected, 2):
+            t1, t2 = combo
+            for template in (
+                f"{t1} {t2} auth",
+                f"{t1} {t2} error",
+                f"{t1} {t2} fix",
+            ):
+                if add_query(template):
+                    return queries
+                if len(queries) >= min_queries:
+                    break
+            if len(queries) >= min_queries:
+                break
+
+    return queries[:max_queries]
 
 
 def _load_threads_from_db():
@@ -199,7 +262,13 @@ def build_query_records(min_per_thread=DEFAULT_MIN_PER_THREAD, max_per_thread=DE
         for message in representatives:
             tokens.extend(_tokenize(message.get("text", "")))
 
-        queries = _generate_queries_from_tokens(tokens, min_per_thread, max_per_thread, representative_text)
+        queries = _generate_queries_from_tokens(
+            thread_id,
+            tokens,
+            min_per_thread,
+            max_per_thread,
+            representative_text,
+        )
 
         for query in queries:
             records.append({
