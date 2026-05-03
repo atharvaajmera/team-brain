@@ -1,7 +1,14 @@
 import chromadb
 from chromadb.config import Settings
+from pathlib import Path
 
-client = chromadb.PersistentClient(path="./chroma_db",settings=Settings(anonymized_telemetry=False))
+REPO_ROOT = Path(__file__).resolve().parent.parent
+CHROMA_PATH = REPO_ROOT / "chroma_db"
+
+client = chromadb.PersistentClient(
+    path=str(CHROMA_PATH),
+    settings=Settings(anonymized_telemetry=False),
+)
 
 collection = client.get_or_create_collection(name="slack_archive")
 
