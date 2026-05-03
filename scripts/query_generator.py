@@ -83,11 +83,10 @@ def _is_bad_query(query):
     tokens = query.split()
     if len(tokens) < 2:
         return True
-    if all(token.isdigit() for token in tokens):
+    numeric_ratio = sum(token.isdigit() for token in tokens) / len(tokens)
+    if numeric_ratio > 0.5:
         return True
     if all(token in STOPWORDS for token in tokens):
-        return True
-    if any(token in STOPWORDS for token in tokens):
         return True
     return False
 
@@ -136,7 +135,8 @@ def _score_token(token, representative_text):
     if token in TECH_WORDS:
         score += 3
     if token.isdigit():
-        score += 3
+        if len(token) >= 3:
+            score += 3
     if any(ch.isdigit() for ch in token):
         score += 2
     if token in representative_text:
@@ -153,7 +153,11 @@ def _rank_tokens(tokens, representative_text):
     ranked_tokens = sorted(
         token_counts,
         key=lambda token: (
-            -(token_counts[token] * 2 + _score_token(token, representative_text)),
+            -(
+                token_counts[token] * 2
+                + _score_token(token, representative_text)
+                - (1 if token not in TECH_WORDS and token_counts[token] == 1 else 0)
+            ),
             token,
         ),
     )
