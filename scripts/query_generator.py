@@ -79,6 +79,19 @@ def _tokenize(text):
     return kept
 
 
+def _is_bad_query(query):
+    tokens = query.split()
+    if len(tokens) < 2:
+        return True
+    if all(token.isdigit() for token in tokens):
+        return True
+    if all(token in STOPWORDS for token in tokens):
+        return True
+    if any(token in STOPWORDS for token in tokens):
+        return True
+    return False
+
+
 def _pick_representative_messages(messages):
     if not messages:
         return []
@@ -160,7 +173,7 @@ def _generate_queries_from_tokens(thread_id, tokens, min_queries, max_queries, r
 
     def add_query(query):
         query = " ".join(query.split()).strip()
-        if query and query not in seen_queries:
+        if query and not _is_bad_query(query) and query not in seen_queries:
             queries.append(query)
             seen_queries.add(query)
             return len(queries) >= max_queries
