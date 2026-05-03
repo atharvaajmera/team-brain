@@ -247,6 +247,9 @@ def _load_threads_from_db():
         }
         threads[str(int(float(thread_id)))].append(message)
 
+    if not threads:
+        print("No threads found in Chroma collection 'slack_archive'.")
+
     return threads
 
 
@@ -316,6 +319,12 @@ def main():
         min_per_thread=args.min_per_thread,
         max_per_thread=args.max_per_thread,
     )
+
+    if not records:
+        raise RuntimeError(
+            "No benchmark queries were generated. Check that the repo-root Chroma DB "
+            "contains ingested messages with thread_id metadata."
+        )
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
