@@ -2,27 +2,39 @@
   {
     "query": "oauth token refresh returning 401 in staging",
     "expected": "NARROW",
-    "desc": "OAuth refresh issue in T1"
+    "expected_thread_terms": ["oauth", "refresh", "401", "staging"],
+    "desc": "OAuth refresh issue"
   },
   {
-    "query": "what api issues are we seeing",
+    "query": "what api login issues are we seeing",
     "expected": "AMBIGUOUS",
-    "desc": "General API discussions spanning T1 and T2"
+    "expected_thread_terms": [
+      ["oauth", "refresh", "staging"],
+      ["google", "login", "redirect"]
+    ],
+    "desc": "Two auth/login related threads"
   },
   {
-    "query": "give me all recent updates across teams",
+    "query": "give me all recent operational updates across teams",
     "expected": "BROAD",
-    "desc": "Broad updates across T4, T7, T10"
+    "expected_thread_terms": [
+      ["migration", "rollback"],
+      ["builds", "integration", "failed"],
+      ["sprint", "planning"]
+    ],
+    "desc": "Broad updates across database, CI, and planning"
   },
   {
     "query": "what did we decide for sprint capacity",
     "expected": "NARROW",
-    "desc": "Sprint planning notes in T10"
+    "expected_thread_terms": ["sprint", "planning", "estimates"],
+    "desc": "Sprint planning notes"
   },
   {
     "query": "latest redis cache and performance discussion",
     "expected": "NARROW",
-    "desc": "Caching thread T9"
+    "expected_thread_terms": ["cache", "evictions", "ttl"],
+    "desc": "Redis caching thread"
   },
   {
     "query": "tell me details about a random movie release",
