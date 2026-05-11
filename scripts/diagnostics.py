@@ -318,6 +318,30 @@ def _print_error_cases(all_results, pred_key, name):
                 f"  {m['query'][:33]:<35} {m['expected']:<10} {m[pred_key]:<10} "
                 f"{mrr:>6}  {exp_t:<16} {top5:<18}"
             )
+        print("\n  Feature details:")
+        for m in case2:
+            print(f"  Query: {m['query']}")
+            print(
+                "    "
+                f"signal={m.get('signal', '?')}  "
+                f"std_distance={m.get('std_distance', '?')}  "
+                f"signal_norm={m.get('signal_norm', '?')}  "
+                f"abs_ratio={m.get('abs_ratio', '?')}"
+            )
+            print(
+                "    "
+                f"rel_gap={m.get('rel_gap', '?')}  "
+                f"gap_score={m.get('gap_score', '?')}  "
+                f"gap_dist={m.get('gap_dist', '?')}  "
+                f"spread={m.get('spread', '?')}"
+            )
+            print(
+                "    "
+                f"entropy={m.get('ent_score_T0.1', '?')}  "
+                f"thread_concentration={m.get('thread_concentration', '?')}  "
+                f"n_threads={m.get('n_threads', '?')}  "
+                f"top3={m.get('top3_threads', '?')}"
+            )
     else:
         print("  (none)")
 
