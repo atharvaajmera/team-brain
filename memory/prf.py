@@ -147,3 +147,41 @@ def build_expanded_queries(query, expansion_terms, max_queries=2):
             return expanded_queries
 
     return expanded_queries[:max_queries]
+
+def merge_prf_candidates(candidate_lists, limit=40):
+    merged_by_id = {}
+
+    for query_index, candidates in enumerate(candidate_lists):
+        for rank, candidate in enumerate(candidates):
+            candidate_id = candidate.get("id")
+            if not candidate_id:
+                continue
+
+            distance = candidate.get("distance", float("inf"))
+            existing = merged_by_id.get(candidate_id)
+
+            if existing is None:
+                merged = dict(candidate)
+                merged["prf_hits"] = 1
+                merged["best_query_index"] = query_index
+                merged["best_rank"] = rank
+                merged["best_distance"] = distance
+                merged_by_id[candidate_id] = merged
+                continue
+
+            existing["prf_hits"] += 1
+            if distance < existing.get("best_distance", float("inf")):
+                existing.update(candidate)
+                existing["best_query_index"] = query_index
+                existing["best_rank"] = rank
+                existing["best_distance"] = distance
+
+    merged = list(merged_by_id.values())
+    merged.sort(
+        key=lambda candidate: (
+            candidate.get("best_distance", float("inf")),
+            -candidate.get("prf_hits", 1),
+            candidate.get("best_rank", float("inf")),
+        )
+    )
+    return merged[:limit]
