@@ -180,18 +180,7 @@ def _load_test_queries(path=DEFAULT_TEST_QUERIES_FILE):
     return queries
 
 
-def run_error_analysis():
-    print("  ERROR ANALYSIS - Recall@5 | MRR | failure categorisation")
-
-    test_queries = _load_test_queries()
-    if not test_queries:
-        print(
-            "  No diagnostics query set found. Add labeled queries to "
-            f"{DEFAULT_TEST_QUERIES_FILE} and re-run."
-        )
-        return
-
-    thread_corpus = _load_thread_corpus()
+def _evaluate_queries(test_queries, thread_corpus, use_prf=False):
     all_results = []
 
     for item in test_queries:
@@ -200,7 +189,7 @@ def run_error_analysis():
         desc = item["desc"]
 
         intent = analyze_query_intent(query)
-        candidates = retrieve_candidates(query, intent, with_filter=False)
+        candidates = retrieve_candidates(query, intent, with_filter=False, use_prf=use_prf)
         if not candidates:
             continue
 
@@ -222,16 +211,55 @@ def run_error_analysis():
 
         all_results.append(m)
 
+    if not all_results:
+        return []
+
     pop_stats = compute_population_stats(all_results)
     for m in all_results:
         m["predicted"] = decide(m, pop_stats)
         m["correct"] = m["predicted"] == m["expected"]
 
-    print("  Training logistic regression (leave-one-out)...\n")
     lr_preds = run_logreg_loo(all_results)
     for i, m in enumerate(all_results):
         m["lr_predicted"] = lr_preds[i]
         m["lr_correct"] = lr_preds[i] == m["expected"]
+
+    return all_results
+
+
+def _summarize_results(all_results):
+    has_threads = [m for m in all_results if m["recall_5"] is not None]
+    avg_recall = np.mean([m["recall_5"] for m in has_threads]) if has_threads else 0.0
+    avg_mrr = np.mean([m["mrr"] for m in has_threads]) if has_threads else 0.0
+    rule_errors = sum(1 for m in all_results if m["predicted"] != m["expected"])
+    lr_errors = sum(1 for m in all_results if m["lr_predicted"] != m["expected"])
+    return {
+        "queries": len(all_results),
+        "recall@5": avg_recall,
+        "mrr": avg_mrr,
+        "rule_errors": rule_errors,
+        "lr_errors": lr_errors,
+    }
+
+
+def run_error_analysis(use_prf=False, label="BASELINE"):
+    print(f"  ERROR ANALYSIS - {label} - Recall@5 | MRR | failure categorisation")
+
+    test_queries = _load_test_queries()
+    if not test_queries:
+        print(
+            "  No diagnostics query set found. Add labeled queries to "
+            f"{DEFAULT_TEST_QUERIES_FILE} and re-run."
+        )
+        return None
+
+    thread_corpus = _load_thread_corpus()
+    all_results = _evaluate_queries(test_queries, thread_corpus, use_prf=use_prf)
+    if not all_results:
+        print("  No diagnostics results produced.")
+        return None
+
+    print("  Training logistic regression (leave-one-out)...\n")
 
     hdr = (
         f"  {'Query':<35} {'Expected':<10} {'Rule':<10} {'LR':<10} "
@@ -250,13 +278,12 @@ def run_error_analysis():
             f"{m['lr_predicted']:<10} {r5:>8} {mrr:>6}  {exp_t:<18} {top5:<18}"
         )
 
-    has_threads = [m for m in all_results if m["recall_5"] is not None]
-    avg_recall = np.mean([m["recall_5"] for m in has_threads]) if has_threads else 0.0
-    avg_mrr = np.mean([m["mrr"] for m in has_threads]) if has_threads else 0.0
+    summary = _summarize_results(all_results)
 
+    has_threads = [m for m in all_results if m["recall_5"] is not None]
     print(f"\n  AGGREGATE (queries with expected threads, n={len(has_threads)}):")
-    print(f"    Recall@5 = {avg_recall:.2%}")
-    print(f"    MRR      = {avg_mrr:.4f}")
+    print(f"    Recall@5 = {summary['recall@5']:.2%}")
+    print(f"    MRR      = {summary['mrr']:.4f}")
 
     for label in ["NARROW", "AMBIGUOUS", "BROAD"]:
         subset = [m for m in all_results if m["expected"] == label and m["recall_5"] is not None]
@@ -268,6 +295,7 @@ def run_error_analysis():
 
     _print_error_cases(all_results, pred_key="predicted", name="RULE-BASED")
     _print_error_cases(all_results, pred_key="lr_predicted", name="LOGREG (LOO)")
+    return summary
 
 
 def _print_error_cases(all_results, pred_key, name):
@@ -360,4 +388,16 @@ def _print_error_cases(all_results, pred_key, name):
 
 
 if __name__ == "__main__":
-    run_error_analysis()
+    baseline = run_error_analysis(use_prf=False, label="BASELINE")
+    print("\n" + "  " + "=" * 74 + "\n")
+    prf = run_error_analysis(use_prf=True, label="PRF")
+
+    if baseline and prf:
+        print("\n  COMPARISON")
+        print(f"  {'Metric':<20} {'Baseline':<12} {'PRF':<12}")
+        print("  " + "-" * 46)
+        print(f"  {'Queries':<20} {baseline['queries']:<12} {prf['queries']:<12}")
+        print(f"  {'Recall@5':<20} {baseline['recall@5']:.2%}       {prf['recall@5']:.2%}")
+        print(f"  {'MRR':<20} {baseline['mrr']:.4f}       {prf['mrr']:.4f}")
+        print(f"  {'Rule errors':<20} {baseline['rule_errors']:<12} {prf['rule_errors']:<12}")
+        print(f"  {'LR errors':<20} {baseline['lr_errors']:<12} {prf['lr_errors']:<12}")

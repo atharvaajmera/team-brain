@@ -1,4 +1,5 @@
 from memory.intent import analyze_query_intent
+from memory.prf import run_prf_retrieval
 from memory.storage import collection
 from memory.ranking import mmr_sort
 
@@ -17,10 +18,8 @@ def build_chroma_filter(query):
 
     return chroma_filter
 
-def retrieve_candidates(query, intent, with_filter=True):
-    chroma_filter = build_chroma_filter(query) if with_filter else None
-    n_results = 40 
-    
+
+def _query_collection(query, chroma_filter=None, n_results=40):
     results = collection.query(
         query_texts=[query],
         n_results=n_results,
@@ -30,7 +29,7 @@ def retrieve_candidates(query, intent, with_filter=True):
 
     if not results['documents'] or not results['documents'][0]:
         return []
-    
+
     docs = results['documents'][0]
     metas = results['metadatas'][0]
     ids = results['ids'][0]
@@ -46,5 +45,24 @@ def retrieve_candidates(query, intent, with_filter=True):
             "distance": dist,
             "embedding": emb
         })
-    
+
     return candidates
+
+def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
+    chroma_filter = build_chroma_filter(query) if with_filter else None
+    n_results = 40
+
+    first_pass = _query_collection(query, chroma_filter=chroma_filter, n_results=n_results)
+    if not use_prf or not first_pass:
+        return first_pass
+
+    def _retrieve_fn(expanded_query):
+        return _query_collection(expanded_query, chroma_filter=chroma_filter, n_results=n_results)
+
+    prf_result = run_prf_retrieval(
+        query,
+        first_pass,
+        retrieve_fn=_retrieve_fn,
+        limit=n_results,
+    )
+    return prf_result["merged_candidates"] or first_pass
