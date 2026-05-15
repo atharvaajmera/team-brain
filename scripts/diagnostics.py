@@ -208,6 +208,7 @@ def _evaluate_queries(test_queries, thread_corpus, use_prf=False):
         m["ranked_threads"] = ranked_tids
         m["recall_5"] = _recall_at_k(ranked_tids, expected_tids, k=5)
         m["mrr"] = _mrr(ranked_tids, expected_tids)
+        m["prf_debug"] = candidates[0].get("prf_debug") if use_prf and candidates else None
 
         all_results.append(m)
 
@@ -277,6 +278,14 @@ def run_error_analysis(use_prf=False, label="BASELINE"):
             f"  {m['query'][:33]:<35} {m['expected']:<10} {m['predicted']:<10} "
             f"{m['lr_predicted']:<10} {r5:>8} {mrr:>6}  {exp_t:<18} {top5:<18}"
         )
+
+    if use_prf:
+        print("\n  PRF expansions:")
+        for m in all_results:
+            debug = m.get("prf_debug") or {}
+            print(f"  Original query : {debug.get('original_query', m['query'])}")
+            print(f"  Expansion terms: {debug.get('expansion_terms', [])}")
+            print(f"  Expanded queries: {debug.get('expanded_queries', [])}")
 
     summary = _summarize_results(all_results)
 

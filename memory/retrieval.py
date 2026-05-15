@@ -65,4 +65,11 @@ def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
         retrieve_fn=_retrieve_fn,
         limit=n_results,
     )
-    return prf_result["merged_candidates"] or first_pass
+    merged = prf_result["merged_candidates"] or first_pass
+    for candidate in merged:
+        candidate.setdefault("prf_debug", {
+            "original_query": query,
+            "expansion_terms": prf_result["expansion_terms"],
+            "expanded_queries": prf_result["expanded_queries"],
+        })
+    return merged
