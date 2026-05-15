@@ -105,3 +105,45 @@ def extract_expansion_terms(query, candidates, max_terms=6, top_k_messages=12):
 
     scored.sort(key=lambda item: (-item[1], -item[3], -item[2], item[0]))
     return [token for token, _, _, _ in scored[:max_terms]]
+
+
+def build_expanded_queries(query, expansion_terms, max_queries=2):
+    base_query = " ".join(query.split()).strip()
+    if not base_query or not expansion_terms or max_queries < 1:
+        return []
+
+    terms = [term.strip() for term in expansion_terms if term and term.strip()]
+    if not terms:
+        return []
+
+    expanded_queries = []
+    seen = set()
+
+    def add_query(parts):
+        expanded = " ".join(part for part in parts if part).strip()
+        expanded = " ".join(expanded.split())
+        if not expanded or expanded == base_query or expanded in seen:
+            return False
+        seen.add(expanded)
+        expanded_queries.append(expanded)
+        return len(expanded_queries) >= max_queries
+
+    top_terms = terms[:4]
+
+    if len(top_terms) >= 2:
+        if add_query([base_query, top_terms[0], top_terms[1]]):
+            return expanded_queries
+
+    if len(top_terms) >= 3:
+        if add_query([base_query, top_terms[0], top_terms[2]]):
+            return expanded_queries
+
+    if len(top_terms) >= 4:
+        if add_query([base_query, top_terms[2], top_terms[3]]):
+            return expanded_queries
+
+    for term in top_terms:
+        if add_query([base_query, term]):
+            return expanded_queries
+
+    return expanded_queries[:max_queries]
