@@ -185,3 +185,42 @@ def merge_prf_candidates(candidate_lists, limit=40):
         )
     )
     return merged[:limit]
+
+def run_prf_retrieval(
+    query,
+    first_pass_candidates,
+    retrieve_fn,
+    max_terms=6,
+    max_queries=2,
+    limit=40,
+):
+    if not first_pass_candidates:
+        return {
+            "expanded_queries": [],
+            "expansion_terms": [],
+            "merged_candidates": [],
+        }
+
+    expansion_terms = extract_expansion_terms(
+        query,
+        first_pass_candidates,
+        max_terms=max_terms,
+    )
+    expanded_queries = build_expanded_queries(
+        query,
+        expansion_terms,
+        max_queries=max_queries,
+    )
+
+    candidate_lists = [first_pass_candidates]
+    for expanded_query in expanded_queries:
+        expanded_candidates = retrieve_fn(expanded_query)
+        if expanded_candidates:
+            candidate_lists.append(expanded_candidates)
+
+    merged_candidates = merge_prf_candidates(candidate_lists, limit=limit)
+    return {
+        "expanded_queries": expanded_queries,
+        "expansion_terms": expansion_terms,
+        "merged_candidates": merged_candidates,
+    }
