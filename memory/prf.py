@@ -58,7 +58,7 @@ def tokenize_prf_text(text):
     return cleaned
 
 
-def extract_expansion_terms(query, candidates, max_terms=6, top_k_messages=12):
+def extract_expansion_terms(query, candidates, max_terms=4, top_k_messages=12):
     top_candidates = candidates[:top_k_messages]
     if not top_candidates:
         return []
@@ -163,25 +163,51 @@ def merge_prf_candidates(candidate_lists, limit=40):
             if existing is None:
                 merged = dict(candidate)
                 merged["prf_hits"] = 1
-                merged["best_query_index"] = query_index
-                merged["best_rank"] = rank
                 merged["best_distance"] = distance
+                merged["original_rank"] = rank if query_index == 0 else None
+                merged["original_distance"] = distance if query_index == 0 else None
+                merged["expansion_hits"] = 0
+                merged["best_expansion_distance"] = None
                 merged_by_id[candidate_id] = merged
                 continue
 
             existing["prf_hits"] += 1
-            if distance < existing.get("best_distance", float("inf")):
+            if query_index == 0:
                 existing.update(candidate)
-                existing["best_query_index"] = query_index
-                existing["best_rank"] = rank
                 existing["best_distance"] = distance
+                existing["original_rank"] = rank
+                existing["original_distance"] = distance
+            else:
+                existing["expansion_hits"] += 1
+                best_expansion_distance = existing.get("best_expansion_distance")
+                if best_expansion_distance is None or distance < best_expansion_distance:
+                    existing["best_expansion_distance"] = distance
+                if existing.get("original_rank") is None and distance < existing.get("best_distance", float("inf")):
+                    existing.update(candidate)
+                    existing["best_distance"] = distance
 
     merged = list(merged_by_id.values())
+
+    for candidate in merged:
+        original_rank = candidate.get("original_rank")
+        original_distance = candidate.get("original_distance")
+        expansion_hits = candidate.get("expansion_hits", 0)
+        best_expansion_distance = candidate.get("best_expansion_distance")
+
+        if original_rank is not None:
+            boost = 0.0
+            boost += min(expansion_hits, 2) * 0.05
+            if best_expansion_distance is not None and original_distance is not None and best_expansion_distance < original_distance:
+                boost += 0.03
+            candidate["prf_merge_score"] = original_rank - boost
+        else:
+            candidate["prf_merge_score"] = 1000 + candidate.get("best_distance", float("inf"))
+
     merged.sort(
         key=lambda candidate: (
+            candidate.get("prf_merge_score", float("inf")),
             candidate.get("best_distance", float("inf")),
             -candidate.get("prf_hits", 1),
-            candidate.get("best_rank", float("inf")),
         )
     )
     return merged[:limit]
@@ -190,7 +216,7 @@ def run_prf_retrieval(
     query,
     first_pass_candidates,
     retrieve_fn,
-    max_terms=6,
+    max_terms=4,
     max_queries=2,
     limit=40,
 ):
