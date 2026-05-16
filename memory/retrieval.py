@@ -1,6 +1,9 @@
+import math
+
+import numpy as np
+
 from memory.intent import analyze_query_intent
 from memory.prf import run_prf_retrieval
-from scripts.benchmark import compute_metrics
 from memory.storage import collection
 from memory.ranking import mmr_sort
 
@@ -49,6 +52,57 @@ def _query_collection(query, chroma_filter=None, n_results=40):
 
     return candidates
 
+
+def _softmax_entropy(values, temp=0.1):
+    values = np.array(values)
+    neg_over_t = -values / temp
+    neg_over_t -= neg_over_t.max()
+    exp_scores = np.exp(neg_over_t)
+    probs = exp_scores / exp_scores.sum()
+    entropy = float(-np.sum(probs * np.log2(probs + 1e-10)))
+    max_entropy = float(np.log2(len(values))) if len(values) > 1 else 1.0
+    return entropy / max_entropy
+
+
+def _compute_prf_gate_metrics(candidates):
+    threads = {}
+    for candidate in candidates:
+        thread_id = candidate["metadata"]["thread_id"]
+        threads.setdefault(thread_id, {"distances": []})
+        threads[thread_id]["distances"].append(candidate["distance"])
+
+    aggregates = []
+    for thread_id, payload in threads.items():
+        distances = payload["distances"]
+        avg_distance = float(np.mean(distances))
+        aggregates.append({
+            "thread_id": thread_id,
+            "thread_score": avg_distance - math.log(len(distances) + 1) * 0.25,
+        })
+
+    if not aggregates:
+        return {"ent_score_T0.1": 0.0, "rel_gap": 1.0}
+
+    sorted_threads = sorted(aggregates, key=lambda item: item["thread_score"])
+    thread_scores = [item["thread_score"] for item in sorted_threads]
+    entropy = _softmax_entropy(thread_scores, temp=0.1)
+
+    if len(sorted_threads) >= 2:
+        best = sorted_threads[0]
+        second = sorted_threads[1]
+        spread = sorted_threads[-1]["thread_score"] - best["thread_score"]
+        rel_gap = (
+            (second["thread_score"] - best["thread_score"]) / spread
+            if spread > 0 else 1.0
+        )
+    else:
+        rel_gap = 1.0
+
+    return {
+        "ent_score_T0.1": entropy,
+        "rel_gap": rel_gap,
+    }
+
 def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
     chroma_filter = build_chroma_filter(query) if with_filter else None
     n_results = 40
@@ -57,7 +111,7 @@ def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
     if not use_prf or not first_pass:
         return first_pass
 
-    metrics = compute_metrics(first_pass)
+    metrics = _compute_prf_gate_metrics(first_pass)
     entropy = metrics.get("ent_score_T0.1", 0.0)
     rel_gap = metrics.get("rel_gap", 1.0)
     if not isinstance(rel_gap, (int, float)):
