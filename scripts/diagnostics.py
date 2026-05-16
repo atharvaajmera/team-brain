@@ -284,6 +284,9 @@ def run_error_analysis(use_prf=False, label="BASELINE"):
         for m in all_results:
             debug = m.get("prf_debug") or {}
             print(f"  Original query : {debug.get('original_query', m['query'])}")
+            print(f"  Apply PRF      : {debug.get('apply_prf', False)}")
+            print(f"  Trigger entropy: {debug.get('trigger_entropy', 'N/A')}")
+            print(f"  Trigger rel_gap: {debug.get('trigger_rel_gap', 'N/A')}")
             print(f"  Expansion terms: {debug.get('expansion_terms', [])}")
             print(f"  Expanded queries: {debug.get('expanded_queries', [])}")
 

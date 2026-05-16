@@ -1,5 +1,6 @@
 from memory.intent import analyze_query_intent
 from memory.prf import run_prf_retrieval
+from scripts.benchmark import compute_metrics
 from memory.storage import collection
 from memory.ranking import mmr_sort
 
@@ -56,6 +57,16 @@ def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
     if not use_prf or not first_pass:
         return first_pass
 
+    metrics = compute_metrics(first_pass)
+    entropy = metrics.get("ent_score_T0.1", 0.0)
+    rel_gap = metrics.get("rel_gap", 1.0)
+    if not isinstance(rel_gap, (int, float)):
+        rel_gap = 1.0
+
+    apply_prf = entropy > 0.6 or rel_gap < 0.15
+    if not apply_prf:
+        return first_pass
+
     def _retrieve_fn(expanded_query):
         return _query_collection(expanded_query, chroma_filter=chroma_filter, n_results=n_results)
 
@@ -69,6 +80,9 @@ def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
     for candidate in merged:
         candidate.setdefault("prf_debug", {
             "original_query": query,
+            "apply_prf": apply_prf,
+            "trigger_entropy": entropy,
+            "trigger_rel_gap": rel_gap,
             "expansion_terms": prf_result["expansion_terms"],
             "expanded_queries": prf_result["expanded_queries"],
         })
