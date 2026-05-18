@@ -1,5 +1,6 @@
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+from memory.decision_rules import decide_label
 
 def mmr_sort(query_embedding, candidate_embeddings, top_k=5, lambda_param=0.5):
     if len(candidate_embeddings) == 0:
@@ -187,14 +188,24 @@ def select_anchor(candidates, mode):
 
     # --- Decision rule: 4-class with z-score normalised thresholds ---
     def _decide():
-        ps = _POP_STATS
-        rg = rel_gap if isinstance(rel_gap, (int, float)) else 1.0
-        z_rg  = (rg         - ps['rel_gap_mean'])     / ps['rel_gap_std']     if ps['rel_gap_std']     > 0 else 0.0
-        z_ent = (entropy     - ps['entropy_mean'])     / ps['entropy_std']     if ps['entropy_std']     > 0 else 0.0
-        z_sig = (signal_norm - ps['signal_norm_mean']) / ps['signal_norm_std'] if ps['signal_norm_std'] > 0 else 0.0
+        label = decide_label(
+            signal_norm=signal_norm,
+            abs_ratio=abs_ratio,
+            rel_gap=rel_gap,
+            entropy=entropy,
+            pop_stats=_POP_STATS,
+            thresholds={
+                "Z_REL_GAP_HIGH": Z_REL_GAP_HIGH,
+                "Z_ENTROPY_LOW": Z_ENTROPY_LOW,
+                "Z_REL_GAP_AMB_LO": Z_REL_GAP_AMB_LO,
+                "Z_REL_GAP_AMB_HI": Z_REL_GAP_AMB_HI,
+                "Z_ENTROPY_AMB_LO": Z_ENTROPY_AMB_LO,
+                "Z_ENTROPY_AMB_HI": Z_ENTROPY_AMB_HI,
+                "Z_SIGNAL_BROAD": Z_SIGNAL_BROAD,
+            },
+        )
 
-        # 1. rel_gap high AND entropy low -> NARROW
-        if z_rg > Z_REL_GAP_HIGH and z_ent < Z_ENTROPY_LOW:
+        if label == "NARROW":
             return {
                 'type': 'narrow',
                 'threads': [best['best_candidate']],
@@ -202,8 +213,7 @@ def select_anchor(candidates, mode):
                 'stats': stats,
             }
 
-        # 2. rel_gap medium AND entropy medium -> AMBIGUOUS
-        if Z_REL_GAP_AMB_LO < z_rg < Z_REL_GAP_AMB_HI and Z_ENTROPY_AMB_LO < z_ent < Z_ENTROPY_AMB_HI:
+        if label == "AMBIGUOUS":
             top_threads = sorted_threads[:MAX_AMBIGUOUS_THREADS]
             return {
                 'type': 'ambiguous',
@@ -212,8 +222,7 @@ def select_anchor(candidates, mode):
                 'stats': stats,
             }
 
-        # 3. signal_norm high -> BROAD
-        if z_sig >= Z_SIGNAL_BROAD:
+        if label == "BROAD":
             top_threads = sorted_threads[:MAX_BROAD_THREADS]
             return {
                 'type': 'broad',
@@ -222,7 +231,6 @@ def select_anchor(candidates, mode):
                 'stats': stats,
             }
 
-        # 4. fallthrough -> REJECT
         return None
 
     return _decide()
