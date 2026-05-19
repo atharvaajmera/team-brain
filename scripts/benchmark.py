@@ -14,6 +14,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import LeaveOneOut
+from memory.decision_rules import decide_label
 from memory.storage import collection
 from memory.retrieval import retrieve_candidates
 from memory.intent import analyze_query_intent
@@ -302,26 +303,22 @@ def decide(m, pop_stats):
     if not isinstance(rg, (int, float)):
         rg = 1.0
 
-    # z-score normalisation using population stats
-    ps = pop_stats
-    z_rg  = (rg - ps['rel_gap_mean']) / ps['rel_gap_std'] if ps['rel_gap_std'] > 0 else 0.0
-    z_ent = (entropy - ps['entropy_mean']) / ps['entropy_std'] if ps['entropy_std'] > 0 else 0.0
-    z_sig = (signal_norm - ps['signal_norm_mean']) / ps['signal_norm_std'] if ps['signal_norm_std'] > 0 else 0.0
-
-    # 1. rel_gap high AND entropy low -> NARROW
-    if z_rg > Z_REL_GAP_HIGH and z_ent < Z_ENTROPY_LOW:
-        return 'NARROW'
-
-    # 2. rel_gap medium AND entropy medium -> AMBIGUOUS
-    if Z_REL_GAP_AMB_LO < z_rg < Z_REL_GAP_AMB_HI and Z_ENTROPY_AMB_LO < z_ent < Z_ENTROPY_AMB_HI:
-        return 'AMBIGUOUS'
-
-    # 3. signal_norm high -> BROAD (relevant but spread across threads)
-    if z_sig >= Z_SIGNAL_BROAD:
-        return 'BROAD'
-
-    # 4. fallthrough -> REJECT
-    return 'REJECT'
+    return decide_label(
+        signal_norm=signal_norm,
+        abs_ratio=m['abs_ratio'],
+        rel_gap=rg,
+        entropy=entropy,
+        pop_stats=pop_stats,
+        thresholds={
+            'Z_REL_GAP_HIGH': Z_REL_GAP_HIGH,
+            'Z_ENTROPY_LOW': Z_ENTROPY_LOW,
+            'Z_REL_GAP_AMB_LO': Z_REL_GAP_AMB_LO,
+            'Z_REL_GAP_AMB_HI': Z_REL_GAP_AMB_HI,
+            'Z_ENTROPY_AMB_LO': Z_ENTROPY_AMB_LO,
+            'Z_ENTROPY_AMB_HI': Z_ENTROPY_AMB_HI,
+            'Z_SIGNAL_BROAD': Z_SIGNAL_BROAD,
+        },
+    )
 
 FEATURE_KEYS = [
     'rel_gap',
