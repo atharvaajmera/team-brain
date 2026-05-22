@@ -374,7 +374,8 @@ def _print_error_cases(all_results, pred_key, name):
                 f"signal={m.get('signal', '?')}  "
                 f"std_distance={m.get('std_distance', '?')}  "
                 f"signal_norm={m.get('signal_norm', '?')}  "
-                f"abs_ratio={m.get('abs_ratio', '?')}"
+                f"abs_ratio={m.get('abs_ratio', '?')}  "
+                f"coherence={m.get('semantic_coherence_top5', '?')}"
             )
             print(
                 "    "

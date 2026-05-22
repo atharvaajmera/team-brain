@@ -1,9 +1,10 @@
-def decide_label(signal_norm, abs_ratio, rel_gap, entropy, pop_stats, thresholds):
+def decide_label(signal_norm, abs_ratio, rel_gap, entropy, coherence, pop_stats, thresholds):
     rg = rel_gap if isinstance(rel_gap, (int, float)) else 1.0
 
     rel_gap_std = pop_stats.get("rel_gap_std", 0.0)
     entropy_std = pop_stats.get("entropy_std", 0.0)
     signal_norm_std = pop_stats.get("signal_norm_std", 0.0)
+    coherence_std = pop_stats.get("coherence_std", 0.0)
 
     z_rg = (
         (rg - pop_stats.get("rel_gap_mean", 0.0)) / rel_gap_std
@@ -17,8 +18,18 @@ def decide_label(signal_norm, abs_ratio, rel_gap, entropy, pop_stats, thresholds
         (signal_norm - pop_stats.get("signal_norm_mean", 0.0)) / signal_norm_std
         if signal_norm_std > 0 else 0.0
     )
+    z_coh = (
+        (coherence - pop_stats.get("coherence_mean", 0.0)) / coherence_std
+        if coherence_std > 0 else 0.0
+    )
 
     if abs_ratio >= 0.88 and entropy >= 0.75 and rg <= 0.05:
+        return "REJECT"
+
+    if coherence <= 0.35 and entropy >= 0.65 and rg <= 0.20:
+        return "REJECT"
+
+    if z_coh <= -1.0 and entropy >= 0.60 and signal_norm <= 1.5:
         return "REJECT"
 
     if signal_norm >= 2.4 and rg >= 0.30 and entropy <= 0.55:

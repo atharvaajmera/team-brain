@@ -15,6 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import LeaveOneOut
 from memory.decision_rules import decide_label
+from memory.ranking import compute_semantic_coherence
 from memory.storage import collection
 from memory.retrieval import retrieve_candidates
 from memory.intent import analyze_query_intent
@@ -53,6 +54,7 @@ def _group_threads(candidates):
             'min_distance': float(np.min(td['distances'])),
             'message_count': len(td['candidates']),
             'thread_score': avg_d - math.log(len(td['candidates']) + 1) * ALPHA,
+            'best_candidate': min(td['candidates'], key=lambda x: x['distance']),
         })
     return aggregates
 
@@ -131,6 +133,10 @@ def compute_metrics(candidates):
     thread_scores = [t['thread_score'] for t in agg_by_score]
     min_dists     = [t['min_distance'] for t in agg_by_score]
     avg_dists     = [t['avg_distance'] for t in agg_by_score]
+    coherence = compute_semantic_coherence(
+        [t['best_candidate'].get('embedding') for t in agg_by_score],
+        top_k=5,
+    )
 
     m['ent_score_T0.1']   = _softmax_entropy(thread_scores, 0.1)
     m['ent_score_T0.05']  = _softmax_entropy(thread_scores, 0.05)
@@ -142,6 +148,7 @@ def compute_metrics(candidates):
     d_range = raw.max() - raw.min()
     normed = ((raw - raw.min()) / d_range).tolist() if d_range > 0 else [0.0] * len(raw)
     m['ent_mindist_norm_T0.1'] = _softmax_entropy(normed, 0.1)
+    m['semantic_coherence_top5'] = round(coherence, 4)
 
     m['top3_threads'] = [int(t['thread_id']) for t in agg_by_score[:3]]
 
@@ -157,7 +164,7 @@ def compute_metrics(candidates):
 
 
 def compute_population_stats(all_metrics):
-    rel_gaps, entropies, signal_norms = [], [], []
+    rel_gaps, entropies, signal_norms, coherences = [], [], [], []
     for m in all_metrics:
         rg = m.get('rel_gap', None)
         if isinstance(rg, (int, float)):
@@ -165,6 +172,7 @@ def compute_population_stats(all_metrics):
         entropies.append(m['ent_score_T0.1'])
         sig = m['signal'] / m['std_distance'] if m['std_distance'] > 0 else 0.0
         signal_norms.append(sig)
+        coherences.append(m.get('semantic_coherence_top5', 1.0))
 
     return {
         'rel_gap_mean':     float(np.mean(rel_gaps)) if rel_gaps else 0.0,
@@ -173,6 +181,8 @@ def compute_population_stats(all_metrics):
         'entropy_std':      float(np.std(entropies)) if len(entropies) > 1 else 1.0,
         'signal_norm_mean': float(np.mean(signal_norms)),
         'signal_norm_std':  float(np.std(signal_norms)) if len(signal_norms) > 1 else 1.0,
+        'coherence_mean':   float(np.mean(coherences)),
+        'coherence_std':    float(np.std(coherences)) if len(coherences) > 1 else 1.0,
     }
 
 def _safe_percentiles(values):
@@ -251,6 +261,7 @@ def calibrate_parameters(queries, with_filter=False):
     rel_gaps = [m.get('rel_gap') for m in all_metrics if isinstance(m.get('rel_gap'), (int, float))]
     entropies = [m['ent_score_T0.1'] for m in all_metrics]
     signal_norms = [m['signal'] / m['std_distance'] if m['std_distance'] > 0 else 0.0 for m in all_metrics]
+    coherences = [m.get('semantic_coherence_top5', 1.0) for m in all_metrics]
 
     params = {
         'generated_at_utc': datetime.now(timezone.utc).isoformat(timespec='seconds'),
@@ -273,6 +284,7 @@ def calibrate_parameters(queries, with_filter=False):
         'rel_gap_percentiles': _safe_percentiles(rel_gaps),
         'entropy_percentiles': _safe_percentiles(entropies),
         'signal_norm_percentiles': _safe_percentiles(signal_norms),
+        'coherence_percentiles': _safe_percentiles(coherences),
     }
 
     return params
@@ -308,6 +320,7 @@ def decide(m, pop_stats):
         abs_ratio=m['abs_ratio'],
         rel_gap=rg,
         entropy=entropy,
+        coherence=m.get('semantic_coherence_top5', 1.0),
         pop_stats=pop_stats,
         thresholds={
             'Z_REL_GAP_HIGH': Z_REL_GAP_HIGH,
@@ -326,6 +339,7 @@ FEATURE_KEYS = [
     'signal_norm',
     'abs_ratio',
     'thread_concentration',
+    'semantic_coherence_top5',
 ]
 
 def extract_features(m):
@@ -340,6 +354,7 @@ def extract_features(m):
         sn,                          # signal_norm
         m['abs_ratio'],              # abs_ratio
         m['thread_concentration'],   # thread_concentration = 1 - (unique_threads / k)
+        m.get('semantic_coherence_top5', 1.0),  # low coherence -> scattered neighborhood
     ]
 
 

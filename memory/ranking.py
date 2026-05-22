@@ -113,6 +113,24 @@ def diversify_threads(thread_aggregates, top_k, lambda_param=0.55, candidate_poo
 
     return [pool[idx] for idx in selected_indices]
 
+
+def compute_semantic_coherence(embeddings, top_k=5):
+    if not embeddings:
+        return 1.0
+
+    limited = [embedding for embedding in embeddings[:top_k] if embedding is not None]
+    if len(limited) <= 1:
+        return 1.0
+
+    vectors = np.array(limited)
+    sims = cosine_similarity(vectors)
+    upper_indices = np.triu_indices(len(limited), k=1)
+    pairwise = sims[upper_indices]
+    if pairwise.size == 0:
+        return 1.0
+
+    return float(np.mean(pairwise))
+
 import json as _json
 import os as _os
 
@@ -139,6 +157,8 @@ _DEFAULTS = {
     "entropy_std":       0.20,
     "signal_norm_mean":  1.50,
     "signal_norm_std":   1.00,
+    "coherence_mean":    0.50,
+    "coherence_std":     0.20,
 }
 
 def _load_params():
@@ -167,6 +187,8 @@ _POP_STATS = {
     "entropy_std":      _PARAMS["entropy_std"],
     "signal_norm_mean": _PARAMS["signal_norm_mean"],
     "signal_norm_std":  _PARAMS["signal_norm_std"],
+    "coherence_mean":   _PARAMS["coherence_mean"],
+    "coherence_std":    _PARAMS["coherence_std"],
 }
 
 
@@ -235,6 +257,10 @@ def select_anchor(candidates, mode):
     # --- Compute entropy over thread scores ---
     thread_scores = [t['thread_score'] for t in sorted_threads]
     entropy = _softmax_entropy(thread_scores, ENTROPY_TEMP)
+    coherence = compute_semantic_coherence(
+        [t['best_candidate'].get('embedding') for t in sorted_threads],
+        top_k=5,
+    )
 
     if len(sorted_threads) >= 2:
         second = sorted_threads[1]
@@ -250,6 +276,7 @@ def select_anchor(candidates, mode):
         'abs_ratio': round(abs_ratio, 4),
         'rel_gap': round(rel_gap, 4),
         'entropy': round(entropy, 4),
+        'coherence': round(coherence, 4),
         'n_threads': len(sorted_threads),
         'best_score': round(float(best['thread_score']), 4),
         'best_msgs': best['message_count'],
@@ -262,6 +289,7 @@ def select_anchor(candidates, mode):
             abs_ratio=abs_ratio,
             rel_gap=rel_gap,
             entropy=entropy,
+            coherence=coherence,
             pop_stats=_POP_STATS,
             thresholds={
                 "Z_REL_GAP_HIGH": Z_REL_GAP_HIGH,
