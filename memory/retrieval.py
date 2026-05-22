@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 from memory.intent import analyze_query_intent
-from memory.prf import run_prf_retrieval
+from memory.prf import PRF_TECH_WORDS, run_prf_retrieval, tokenize_prf_text
 from memory.storage import collection
 from memory.ranking import mmr_sort
 
@@ -103,6 +103,83 @@ def _compute_prf_gate_metrics(candidates):
         "rel_gap": rel_gap,
     }
 
+
+def _compute_domain_confidence(query, candidates, top_k_messages=8):
+    query_tokens = tokenize_prf_text(query)
+    if not query_tokens:
+        return {
+            "domain_confidence": 0.0,
+            "tech_ratio": 0.0,
+            "support_ratio": 0.0,
+            "ood_ratio": 1.0,
+            "supported_terms": [],
+            "unsupported_terms": [],
+            "mixed_domain": False,
+        }
+
+    top_candidates = candidates[:top_k_messages]
+    doc_tokens = []
+    token_document_support = {}
+
+    for candidate in top_candidates:
+        text = candidate.get("document") or candidate.get("metadata", {}).get("text", "")
+        tokens = set(tokenize_prf_text(text))
+        doc_tokens.append(tokens)
+        for token in tokens:
+            token_document_support[token] = token_document_support.get(token, 0) + 1
+
+    supported_terms = []
+    unsupported_terms = []
+    tech_terms = []
+
+    for token in query_tokens:
+        if token in PRF_TECH_WORDS:
+            tech_terms.append(token)
+
+        support = token_document_support.get(token, 0)
+        # Consider query terms supported when they either look domain-native
+        # or recur across the first retrieval set.
+        is_supported = (
+            token in PRF_TECH_WORDS
+            or support >= 2
+            or (support >= 1 and any(ch.isdigit() for ch in token))
+        )
+        if is_supported:
+            supported_terms.append(token)
+        else:
+            unsupported_terms.append(token)
+
+    token_count = len(query_tokens)
+    tech_ratio = len(tech_terms) / token_count
+    support_ratio = len(supported_terms) / token_count
+    ood_ratio = len(unsupported_terms) / token_count
+    mixed_domain = (
+        len(unsupported_terms) >= 2
+        and tech_ratio > 0.0
+        and tech_ratio < 0.75
+        and ood_ratio >= 0.34
+    )
+
+    domain_confidence = (
+        (support_ratio * 0.5)
+        + (tech_ratio * 0.3)
+        + ((1.0 - ood_ratio) * 0.2)
+    )
+    if mixed_domain:
+        domain_confidence -= 0.15
+
+    domain_confidence = max(0.0, min(1.0, domain_confidence))
+
+    return {
+        "domain_confidence": round(domain_confidence, 4),
+        "tech_ratio": round(tech_ratio, 4),
+        "support_ratio": round(support_ratio, 4),
+        "ood_ratio": round(ood_ratio, 4),
+        "supported_terms": supported_terms,
+        "unsupported_terms": unsupported_terms,
+        "mixed_domain": mixed_domain,
+    }
+
 def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
     chroma_filter = build_chroma_filter(query) if with_filter else None
     n_results = 40
@@ -112,13 +189,39 @@ def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
         return first_pass
 
     metrics = _compute_prf_gate_metrics(first_pass)
+    domain_metrics = _compute_domain_confidence(query, first_pass)
     entropy = metrics.get("ent_score_T0.1", 0.0)
     rel_gap = metrics.get("rel_gap", 1.0)
+    domain_confidence = domain_metrics.get("domain_confidence", 0.0)
+    ood_ratio = domain_metrics.get("ood_ratio", 1.0)
+    mixed_domain = domain_metrics.get("mixed_domain", False)
     if not isinstance(rel_gap, (int, float)):
         rel_gap = 1.0
 
-    apply_prf = entropy > 0.6 or rel_gap < 0.15
+    passes_domain_gate = (
+        domain_confidence >= 0.45
+        and ood_ratio <= 0.55
+        and not mixed_domain
+    )
+    apply_prf = passes_domain_gate and (entropy > 0.6 or rel_gap < 0.15)
     if not apply_prf:
+        for candidate in first_pass:
+            candidate.setdefault("prf_debug", {
+                "original_query": query,
+                "apply_prf": False,
+                "trigger_entropy": entropy,
+                "trigger_rel_gap": rel_gap,
+                "domain_confidence": domain_confidence,
+                "tech_ratio": domain_metrics.get("tech_ratio"),
+                "support_ratio": domain_metrics.get("support_ratio"),
+                "ood_ratio": ood_ratio,
+                "mixed_domain": mixed_domain,
+                "supported_terms": domain_metrics.get("supported_terms", []),
+                "unsupported_terms": domain_metrics.get("unsupported_terms", []),
+                "blocked_by_domain_gate": not passes_domain_gate,
+                "expansion_terms": [],
+                "expanded_queries": [],
+            })
         return first_pass
 
     def _retrieve_fn(expanded_query):
@@ -137,6 +240,14 @@ def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
             "apply_prf": apply_prf,
             "trigger_entropy": entropy,
             "trigger_rel_gap": rel_gap,
+            "domain_confidence": domain_confidence,
+            "tech_ratio": domain_metrics.get("tech_ratio"),
+            "support_ratio": domain_metrics.get("support_ratio"),
+            "ood_ratio": ood_ratio,
+            "mixed_domain": mixed_domain,
+            "supported_terms": domain_metrics.get("supported_terms", []),
+            "unsupported_terms": domain_metrics.get("unsupported_terms", []),
+            "blocked_by_domain_gate": not passes_domain_gate,
             "expansion_terms": prf_result["expansion_terms"],
             "expanded_queries": prf_result["expanded_queries"],
         })
