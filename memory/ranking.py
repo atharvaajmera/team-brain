@@ -44,6 +44,75 @@ def mmr_sort(query_embedding, candidate_embeddings, top_k=5, lambda_param=0.5):
 
     return selected_indices
 
+
+def _normalize_relevance_scores(values):
+    if not values:
+        return []
+
+    arr = np.array(values, dtype=float)
+    if len(arr) == 1:
+        return [1.0]
+
+    min_v = float(arr.min())
+    max_v = float(arr.max())
+    spread = max_v - min_v
+    if spread <= 0:
+        return [1.0] * len(arr)
+
+    # Lower thread scores are better, so invert into a 0..1 relevance score.
+    normalized = 1.0 - ((arr - min_v) / spread)
+    return normalized.tolist()
+
+
+def diversify_threads(thread_aggregates, top_k, lambda_param=0.55, candidate_pool=None):
+    if not thread_aggregates or top_k <= 0:
+        return []
+
+    if len(thread_aggregates) <= top_k:
+        return list(thread_aggregates)
+
+    pool_size = candidate_pool or max(top_k * 2, top_k)
+    pool = list(thread_aggregates[:pool_size])
+    embeddings = []
+
+    for thread in pool:
+        embedding = thread.get('best_candidate', {}).get('embedding')
+        if embedding is None:
+            return pool[:top_k]
+        embeddings.append(embedding)
+
+    selected_indices = []
+    remaining_indices = list(range(len(pool)))
+    relevance_scores = _normalize_relevance_scores(
+        [thread['thread_score'] for thread in pool]
+    )
+    cand_vecs = np.array(embeddings)
+
+    while remaining_indices and len(selected_indices) < top_k:
+        best_idx = remaining_indices[0]
+        best_score = -np.inf
+
+        for idx in remaining_indices:
+            relevance = relevance_scores[idx]
+            if not selected_indices:
+                novelty_penalty = 0.0
+            else:
+                similarities = cosine_similarity(
+                    cand_vecs[idx].reshape(1, -1),
+                    cand_vecs[selected_indices],
+                )[0]
+                novelty_penalty = float(np.max(similarities))
+
+            score = (lambda_param * relevance) - ((1 - lambda_param) * novelty_penalty)
+            if score > best_score:
+                best_score = score
+                best_idx = idx
+
+        selected_indices.append(best_idx)
+        remaining_indices.remove(best_idx)
+
+    return [pool[idx] for idx in selected_indices]
+
 import json as _json
 import os as _os
 
@@ -214,7 +283,12 @@ def select_anchor(candidates, mode):
             }
 
         if label == "AMBIGUOUS":
-            top_threads = sorted_threads[:MAX_AMBIGUOUS_THREADS]
+            top_threads = diversify_threads(
+                sorted_threads,
+                top_k=MAX_AMBIGUOUS_THREADS,
+                lambda_param=0.60,
+                candidate_pool=max(6, MAX_AMBIGUOUS_THREADS * 3),
+            )
             return {
                 'type': 'ambiguous',
                 'threads': [t['best_candidate'] for t in top_threads],
@@ -223,7 +297,12 @@ def select_anchor(candidates, mode):
             }
 
         if label == "BROAD":
-            top_threads = sorted_threads[:MAX_BROAD_THREADS]
+            top_threads = diversify_threads(
+                sorted_threads,
+                top_k=MAX_BROAD_THREADS,
+                lambda_param=0.45,
+                candidate_pool=max(8, MAX_BROAD_THREADS * 3),
+            )
             return {
                 'type': 'broad',
                 'threads': [t['best_candidate'] for t in top_threads],
