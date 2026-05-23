@@ -243,6 +243,83 @@ def _summarize_results(all_results):
     }
 
 
+def _retrieval_hit_flag(result):
+    recall = result.get("recall_5")
+    if recall is None:
+        return "N/A"
+    return "Y" if recall == 1 else "N"
+
+
+def _bucket(value, low_cut, high_cut):
+    if value < low_cut:
+        return "low"
+    if value < high_cut:
+        return "mid"
+    return "high"
+
+
+def _print_geometric_view(all_results, pred_key="predicted", name="RULE-BASED"):
+    print(f"\n  GEOMETRIC VIEW - {name}")
+    print("  (entropy x coherence for failure cases)")
+
+    wrong = [m for m in all_results if m[pred_key] != m["expected"]]
+    if not wrong:
+        print("  (none)")
+        return
+
+    hdr = (
+        f"  {'Query':<35} {'Entropy':>8} {'Coherence':>10} "
+        f"{'Label':<10} {'Predicted':<10} {'Retr.Hit':<9}"
+    )
+    print(hdr)
+    print("  " + "-" * (len(hdr) - 2))
+
+    for m in wrong:
+        entropy = m.get("ent_score_T0.1", 0.0)
+        coherence = m.get("semantic_coherence_top5", 0.0)
+        retrieval_hit = _retrieval_hit_flag(m)
+        print(
+            f"  {m['query'][:33]:<35} "
+            f"{entropy:>8.4f} {coherence:>10.4f} "
+            f"{m['expected']:<10} {m[pred_key]:<10} {retrieval_hit:<9}"
+        )
+
+    entropy_values = [m.get("ent_score_T0.1", 0.0) for m in all_results]
+    coherence_values = [m.get("semantic_coherence_top5", 0.0) for m in all_results]
+    ent_low, ent_high = np.percentile(entropy_values, [33, 66])
+    coh_low, coh_high = np.percentile(coherence_values, [33, 66])
+
+    print("\n  Region summary by expected label:")
+    print(
+        f"  entropy cuts: low<{ent_low:.3f}, mid<{ent_high:.3f}, high>= {ent_high:.3f}"
+    )
+    print(
+        f"  coherence cuts: low<{coh_low:.3f}, mid<{coh_high:.3f}, high>= {coh_high:.3f}"
+    )
+
+    for label in ["NARROW", "AMBIGUOUS", "BROAD", "REJECT"]:
+        subset = [m for m in all_results if m["expected"] == label]
+        if not subset:
+            continue
+
+        regions = defaultdict(int)
+        for m in subset:
+            ent_bucket = _bucket(m.get("ent_score_T0.1", 0.0), ent_low, ent_high)
+            coh_bucket = _bucket(m.get("semantic_coherence_top5", 0.0), coh_low, coh_high)
+            regions[(ent_bucket, coh_bucket)] += 1
+
+        avg_entropy = np.mean([m.get("ent_score_T0.1", 0.0) for m in subset])
+        avg_coherence = np.mean([m.get("semantic_coherence_top5", 0.0) for m in subset])
+        dominant = sorted(regions.items(), key=lambda item: (-item[1], item[0]))[:3]
+        dominant_text = ", ".join(
+            f"{ent}/{coh}:{count}" for (ent, coh), count in dominant
+        ) or "-"
+        print(
+            f"    {label:<10} avg_entropy={avg_entropy:.4f}  "
+            f"avg_coherence={avg_coherence:.4f}  top_regions=[{dominant_text}]"
+        )
+
+
 def run_error_analysis(use_prf=False, label="BASELINE"):
     print(f"  ERROR ANALYSIS - {label} - Recall@5 | MRR | failure categorisation")
 
@@ -314,7 +391,9 @@ def run_error_analysis(use_prf=False, label="BASELINE"):
         print(f"    {label:<10}  Recall@5={r:.2%}  MRR={mrr_v:.4f}  (n={len(subset)})")
 
     _print_error_cases(all_results, pred_key="predicted", name="RULE-BASED")
+    _print_geometric_view(all_results, pred_key="predicted", name="RULE-BASED")
     _print_error_cases(all_results, pred_key="lr_predicted", name="LOGREG (LOO)")
+    _print_geometric_view(all_results, pred_key="lr_predicted", name="LOGREG (LOO)")
     return summary
 
 
