@@ -466,7 +466,6 @@ def _print_error_cases(all_results, pred_key, name):
             print(
                 "    "
                 f"entropy={m.get('ent_score_T0.1', '?')}  "
-                f"thread_concentration={m.get('thread_concentration', '?')}  "
                 f"n_threads={m.get('n_threads', '?')}  "
                 f"top3={m.get('top3_threads', '?')}"
             )

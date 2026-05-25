@@ -152,14 +152,6 @@ def compute_metrics(candidates):
 
     m['top3_threads'] = [int(t['thread_id']) for t in agg_by_score[:3]]
 
-    top_k = len(candidates)
-    thread_ids_in_topk = [c['metadata']['thread_id'] for c in candidates]
-    unique_threads = len(set(thread_ids_in_topk))
-    thread_concentration = 1.0 - (unique_threads / top_k) if top_k > 0 else 0.0
-
-    m['unique_threads'] = unique_threads
-    m['thread_concentration'] = round(thread_concentration, 4)
-
     return m
 
 
@@ -338,7 +330,6 @@ FEATURE_KEYS = [
     'entropy',
     'signal_norm',
     'abs_ratio',
-    'thread_concentration',
     'semantic_coherence_top5',
 ]
 
@@ -353,7 +344,6 @@ def extract_features(m):
         m['ent_score_T0.1'],         # entropy
         sn,                          # signal_norm
         m['abs_ratio'],              # abs_ratio
-        m['thread_concentration'],   # thread_concentration = 1 - (unique_threads / k)
         m.get('semantic_coherence_top5', 1.0),  # low coherence -> scattered neighborhood
     ]
 
