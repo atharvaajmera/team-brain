@@ -1,0 +1,77 @@
+[
+  {
+    "query": "kubernetes crashloopbackoff memory limit fix",
+    "expected": "NARROW",
+    "top_threads": ["1777800686", "1777800630", "1777800672", "1777800606", "1777800643"]
+  },
+  {
+    "query": "what api login issues are we seeing",
+    "expected": "AMBIGUOUS",
+    "top_threads": ["1777800538", "1777800698", "1777800552", "1777800672", "1777800727"]
+  },
+  {
+    "query": "deployment failures and rollback incidents",
+    "expected": "AMBIGUOUS",
+    "top_threads": ["1777800578", "1777800713", "1777800643", "1777800658", "1777800552"]
+  },
+  {
+    "query": "build and deploy pipeline problems",
+    "expected": "AMBIGUOUS",
+    "top_threads": ["1777800606", "1777800593", "1777800552", "1777800538", "1777800578"]
+  },
+  {
+    "query": "database and orders query issues",
+    "expected": "AMBIGUOUS",
+    "top_threads": ["1777800564", "1777800713", "1777800578", "1777800618", "1777800727"]
+  },
+  {
+    "query": "team planning and handoff process issues",
+    "expected": "AMBIGUOUS",
+    "top_threads": ["1777800698", "1777800713", "1777800593", "1777800578", "1777800564"]
+  },
+  {
+    "query": "pipeline timeout versus docker build bloat",
+    "expected": "AMBIGUOUS",
+    "top_threads": ["1777800593", "1777800606", "1777800686", "1777800672", "1777800630"]
+  },
+  {
+    "query": "give me all recent operational updates across teams",
+    "expected": "BROAD",
+    "top_threads": ["1777800698", "1777800713", "1777800578", "1777800538", "1777800593"]
+  },
+  {
+    "query": "summarize all infrastructure and devops updates",
+    "expected": "BROAD",
+    "top_threads": ["1777800713", "1777800593", "1777800606", "1777800643", "1777800686"]
+  },
+  {
+    "query": "what happened across security topics lately",
+    "expected": "BROAD",
+    "top_threads": ["1777800713", "1777800643", "1777800538", "1777800727", "1777800698"]
+  },
+  {
+    "query": "give me engineering updates across backend frontend and mobile",
+    "expected": "BROAD",
+    "top_threads": ["1777800698", "1777800713", "1777800727", "1777800643", "1777800672"]
+  },
+  {
+    "query": "summarize all auth and access related updates",
+    "expected": "BROAD",
+    "top_threads": ["1777800698", "1777800538", "1777800643", "1777800658", "1777800713"]
+  },
+  {
+    "query": "what were the main reliability issues across the system",
+    "expected": "BROAD",
+    "top_threads": ["1777800643", "1777800630", "1777800713", "1777800593", "1777800672"]
+  },
+  {
+    "query": "give me all deployment and release related updates",
+    "expected": "BROAD",
+    "top_threads": ["1777800713", "1777800578", "1777800727", "1777800552", "1777800643"]
+  },
+  {
+    "query": "weather forecast for mumbai this weekend",
+    "expected": "REJECT",
+    "top_threads": ["1777800698", "1777800713", "1777800643", "1777800727", "1777800578"]
+  }
+]
