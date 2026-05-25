@@ -150,13 +150,10 @@ _DEFAULTS = {
     "Z_REL_GAP_AMB_HI":  1.00,
     "Z_ENTROPY_AMB_LO": -1.00,
     "Z_ENTROPY_AMB_HI":  0.50,
-    "Z_SIGNAL_BROAD":    1.50,
     "rel_gap_mean":      0.50,
     "rel_gap_std":       0.30,
     "entropy_mean":      0.50,
     "entropy_std":       0.20,
-    "signal_norm_mean":  1.50,
-    "signal_norm_std":   1.00,
     "coherence_mean":    0.50,
     "coherence_std":     0.20,
 }
@@ -178,15 +175,12 @@ Z_REL_GAP_AMB_LO = _PARAMS["Z_REL_GAP_AMB_LO"]
 Z_REL_GAP_AMB_HI = _PARAMS["Z_REL_GAP_AMB_HI"]
 Z_ENTROPY_AMB_LO = _PARAMS["Z_ENTROPY_AMB_LO"]
 Z_ENTROPY_AMB_HI = _PARAMS["Z_ENTROPY_AMB_HI"]
-Z_SIGNAL_BROAD   = _PARAMS["Z_SIGNAL_BROAD"]
 
 _POP_STATS = {
     "rel_gap_mean":     _PARAMS["rel_gap_mean"],
     "rel_gap_std":      _PARAMS["rel_gap_std"],
     "entropy_mean":     _PARAMS["entropy_mean"],
     "entropy_std":      _PARAMS["entropy_std"],
-    "signal_norm_mean": _PARAMS["signal_norm_mean"],
-    "signal_norm_std":  _PARAMS["signal_norm_std"],
     "coherence_mean":   _PARAMS["coherence_mean"],
     "coherence_std":    _PARAMS["coherence_std"],
 }
@@ -249,9 +243,6 @@ def select_anchor(candidates, mode):
     # --- Compute decision metrics ---
     all_distances = [c['distance'] for c in candidates]
     mean_distance = np.mean(all_distances)
-    std_distance = float(np.std(all_distances))
-    signal = mean_distance - best['min_distance']
-    signal_norm = signal / std_distance if std_distance > 0 else 0.0
     abs_ratio = best['min_distance'] / mean_distance if mean_distance > 0 else 1.0
 
     # --- Compute entropy over thread scores ---
@@ -272,7 +263,6 @@ def select_anchor(candidates, mode):
 
     # --- Stats dict to pass through ---
     stats = {
-        'signal_norm': round(signal_norm, 4),
         'abs_ratio': round(abs_ratio, 4),
         'rel_gap': round(rel_gap, 4),
         'entropy': round(entropy, 4),
@@ -285,7 +275,7 @@ def select_anchor(candidates, mode):
     # --- Decision rule: 4-class with z-score normalised thresholds ---
     def _decide():
         label = decide_label(
-            signal_norm=signal_norm,
+            signal_norm=0.0,
             abs_ratio=abs_ratio,
             rel_gap=rel_gap,
             entropy=entropy,
@@ -298,7 +288,6 @@ def select_anchor(candidates, mode):
                 "Z_REL_GAP_AMB_HI": Z_REL_GAP_AMB_HI,
                 "Z_ENTROPY_AMB_LO": Z_ENTROPY_AMB_LO,
                 "Z_ENTROPY_AMB_HI": Z_ENTROPY_AMB_HI,
-                "Z_SIGNAL_BROAD": Z_SIGNAL_BROAD,
             },
         )
 

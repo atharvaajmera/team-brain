@@ -29,9 +29,10 @@ if __name__ == "__main__":
         # -- Category & retrieval stats --
         print(f"\n  Category : {category}")
         if stats:
-            print(f"  Stats    : signal_norm={stats.get('signal_norm','?')}  "
-                  f"rel_gap={stats.get('rel_gap','?')}  "
+            print(f"  Stats    : rel_gap={stats.get('rel_gap','?')}  "
                   f"entropy={stats.get('entropy','?')}  "
+                  f"coherence={stats.get('coherence','?')}  "
+                  f"abs_ratio={stats.get('abs_ratio','?')}  "
                   f"threads={stats.get('n_threads','?')}")
 
         # -- LLM response --

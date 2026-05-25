@@ -3,7 +3,6 @@ def decide_label(signal_norm, abs_ratio, rel_gap, entropy, coherence, pop_stats,
 
     rel_gap_std = pop_stats.get("rel_gap_std", 0.0)
     entropy_std = pop_stats.get("entropy_std", 0.0)
-    signal_norm_std = pop_stats.get("signal_norm_std", 0.0)
     coherence_std = pop_stats.get("coherence_std", 0.0)
 
     z_rg = (
@@ -14,31 +13,27 @@ def decide_label(signal_norm, abs_ratio, rel_gap, entropy, coherence, pop_stats,
         (entropy - pop_stats.get("entropy_mean", 0.0)) / entropy_std
         if entropy_std > 0 else 0.0
     )
-    z_sig = (
-        (signal_norm - pop_stats.get("signal_norm_mean", 0.0)) / signal_norm_std
-        if signal_norm_std > 0 else 0.0
-    )
     z_coh = (
         (coherence - pop_stats.get("coherence_mean", 0.0)) / coherence_std
         if coherence_std > 0 else 0.0
     )
 
-    if abs_ratio >= 0.88 and entropy >= 0.75 and rg <= 0.05:
+    if abs_ratio >= 0.90 and entropy >= 0.78 and coherence <= 0.19:
         return "REJECT"
 
-    if coherence <= 0.35 and entropy >= 0.65 and rg <= 0.20:
+    if coherence <= 0.18 and entropy >= 0.70 and rg <= 0.22:
         return "REJECT"
 
-    if z_coh <= -1.0 and entropy >= 0.60 and signal_norm <= 1.5:
+    if z_coh <= -0.9 and z_ent >= 0.8 and abs_ratio >= 0.84:
         return "REJECT"
 
-    if signal_norm >= 2.4 and rg >= 0.30 and entropy <= 0.55:
+    if abs_ratio <= 0.62 and rg >= 0.34 and entropy <= 0.32:
         return "NARROW"
 
-    if rg <= 0.12 and entropy >= 0.65 and signal_norm < 1.4:
+    if rg <= 0.15 and entropy >= 0.48 and entropy < 0.72 and coherence >= 0.20:
         return "AMBIGUOUS"
 
-    if rg <= 0.15 and entropy >= 0.60 and signal_norm >= 1.4 and abs_ratio <= 0.85:
+    if rg <= 0.24 and entropy >= 0.62 and coherence >= 0.18 and abs_ratio < 0.90:
         return "BROAD"
 
     if z_rg > thresholds["Z_REL_GAP_HIGH"] and z_ent < thresholds["Z_ENTROPY_LOW"]:
@@ -50,10 +45,10 @@ def decide_label(signal_norm, abs_ratio, rel_gap, entropy, coherence, pop_stats,
     ):
         return "AMBIGUOUS"
 
-    if z_sig >= thresholds["Z_SIGNAL_BROAD"]:
+    if z_ent >= 0.7 and z_coh >= -0.3 and abs_ratio < 0.92:
         return "BROAD"
 
-    if signal_norm >= 1.0 and entropy >= 0.45:
+    if entropy >= 0.45 and coherence >= 0.21:
         return "AMBIGUOUS"
 
     return "REJECT"
