@@ -138,6 +138,7 @@ ALPHA = 0.25
 ENTROPY_TEMP = 0.1
 MAX_BROAD_THREADS = 3
 MAX_AMBIGUOUS_THREADS = 2
+MAX_REJECT_THREADS = 2
 MIN_THREAD_SIZE = 2
 
 _PARAMS_PATH = str(_os.path.join(_os.path.dirname(_os.path.dirname(__file__)), "config", "parameters.json"))
@@ -327,6 +328,17 @@ def select_anchor(candidates, mode):
                 'stats': stats,
             }
 
-        return None
+        top_threads = diversify_threads(
+            sorted_threads,
+            top_k=MAX_REJECT_THREADS,
+            lambda_param=0.35,
+            candidate_pool=max(6, MAX_REJECT_THREADS * 3),
+        )
+        return {
+            'type': 'reject',
+            'threads': [t['best_candidate'] for t in top_threads],
+            'thread_ids': [t['thread_id'] for t in top_threads],
+            'stats': stats,
+        }
 
     return _decide()

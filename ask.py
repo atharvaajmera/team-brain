@@ -142,7 +142,7 @@ if __name__ == "__main__":
             break
 
         result = query_text_phase_2(user_query)
-        if not result or not result.get("threads"):
+        if not result:
             print(
                 "\n".join(
                     [

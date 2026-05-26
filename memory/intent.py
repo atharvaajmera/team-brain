@@ -1,8 +1,104 @@
 from dateparser.search import search_dates
 from datetime import datetime, timedelta
+import re
 
 aggregation=["issues","bugs","tasks","features","improvements","questions","discussions","announcements","updates"]
 aggregation.sort(key=lambda x: -len(x))
+
+_TEMPORAL_KEYWORDS = {
+    "today",
+    "yesterday",
+    "tomorrow",
+    "recent",
+    "recently",
+    "latest",
+    "currently",
+    "current",
+    "now",
+    "week",
+    "month",
+    "year",
+    "quarter",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+    "jan",
+    "january",
+    "feb",
+    "february",
+    "mar",
+    "march",
+    "apr",
+    "april",
+    "may",
+    "jun",
+    "june",
+    "jul",
+    "july",
+    "aug",
+    "august",
+    "sep",
+    "sept",
+    "september",
+    "oct",
+    "october",
+    "nov",
+    "november",
+    "dec",
+    "december",
+}
+
+_TEMPORAL_PHRASES = (
+    "all time",
+    "this week",
+    "this month",
+    "this year",
+    "last week",
+    "last month",
+    "last year",
+    "past week",
+    "past month",
+    "past year",
+    "next week",
+    "next month",
+    "next year",
+)
+
+
+def _looks_like_temporal_match(query, matched_text):
+    text = (matched_text or "").strip().lower()
+    if not text:
+        return False
+
+    # Reject the noisy one-word matches that caused filters like "we", "me", "to", "on".
+    if len(text) < 4 and not any(ch.isdigit() for ch in text):
+        return False
+
+    if text in _TEMPORAL_KEYWORDS:
+        return True
+
+    if any(phrase in query.lower() and phrase in text for phrase in _TEMPORAL_PHRASES):
+        return True
+
+    tokens = re.findall(r"[a-zA-Z0-9]+", text)
+    if not tokens:
+        return False
+
+    if any(token.isdigit() for token in tokens):
+        return True
+
+    if any(token in _TEMPORAL_KEYWORDS for token in tokens):
+        return True
+
+    # Accept ordinal / dated patterns like "may 5", "5 may", "2025-05-01".
+    if re.search(r"\b\d{1,4}[-/]\d{1,2}([-/]\d{1,4})?\b", text):
+        return True
+
+    return False
 
 def extract_temporal_filter(query):
     """
@@ -20,7 +116,16 @@ def extract_temporal_filter(query):
     
     if date_results:
         # Get the first date match (dateparser returns list of tuples: (matched_text, datetime_obj))
-        matched_text, parsed_date = date_results[0]
+        matched_text = None
+        parsed_date = None
+        for candidate_text, candidate_date in date_results:
+            if _looks_like_temporal_match(query, candidate_text):
+                matched_text = candidate_text
+                parsed_date = candidate_date
+                break
+
+        if matched_text is None or parsed_date is None:
+            return None, None
         
         # Handle special cases for relative dates to get start of period
         query_lower = query.lower()

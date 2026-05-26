@@ -14,9 +14,6 @@ def build_chroma_filter(query):
     if intent['filter_timeline']:
         chroma_filter['ts']={"$gte":intent['filter_timeline']}
 
-    if intent['aggregation']:
-        print("Aggregation detected:", intent['aggregation'])
-
     if not chroma_filter:
         chroma_filter=None
 
