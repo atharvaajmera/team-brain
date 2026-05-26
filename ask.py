@@ -102,19 +102,28 @@ def _render_result(query, result):
     if result.get("is_fallback"):
         sections.append(f"Fallback: {result.get('fallback_reason', 'retrieval fallback used')}")
 
-    sections.extend(
-        [
-            "",
-            "Top Threads:",
-            _format_top_threads(threads),
-            "",
-            "Summary:",
-            summary,
-            "",
-            "Evidence:",
-            _format_evidence(threads),
-        ]
-    )
+    if intent == "REJECT":
+        sections.extend(
+            [
+                "",
+                "Summary:",
+                summary,
+            ]
+        )
+    else:
+        sections.extend(
+            [
+                "",
+                "Top Threads:",
+                _format_top_threads(threads),
+                "",
+                "Summary:",
+                summary,
+                "",
+                "Evidence:",
+                _format_evidence(threads),
+            ]
+        )
 
     return "\n".join(sections)
 

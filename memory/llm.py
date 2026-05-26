@@ -43,8 +43,9 @@ def _build_prompt(query, category, context):
             "Provide a summary across all relevant threads. Highlight key themes."
         ),
         "REJECT": (
-            "No relevant threads were found for this query. "
-            "Politely let the user know and suggest they refine their question."
+            "The retrieved Slack threads are not clearly relevant enough to answer the user's question. "
+            "Do not summarize weakly related threads. Politely say that no relevant Slack evidence was found, "
+            "and suggest refining the question."
         ),
     }
 
@@ -55,6 +56,9 @@ def _build_prompt(query, category, context):
         f"You answer questions based on archived Slack conversations.\n\n"
         f"Category: {category}\n"
         f"Instruction: {instruction}\n\n"
+        f"Important rule: If the retrieved threads are only loosely related to the user query, "
+        f"do not infer or fabricate an answer from them. Instead, clearly state that no relevant "
+        f"Slack evidence was found.\n\n"
         f"--- Retrieved Slack threads ---\n{context}\n"
         f"--- End of threads ---\n\n"
         f"User question: {query}\n\n"
