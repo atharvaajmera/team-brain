@@ -1,5 +1,17 @@
-def decide_label(signal_norm, abs_ratio, rel_gap, entropy, coherence, pop_stats, thresholds):
+def decide_label(
+    signal_norm,
+    abs_ratio,
+    rel_gap,
+    entropy,
+    coherence,
+    pop_stats,
+    thresholds,
+    domain_confidence=None,
+    support_ratio=None,
+):
     rg = rel_gap if isinstance(rel_gap, (int, float)) else 1.0
+    dc = domain_confidence if isinstance(domain_confidence, (int, float)) else None
+    sr = support_ratio if isinstance(support_ratio, (int, float)) else None
 
     rel_gap_std = pop_stats.get("rel_gap_std", 0.0)
     entropy_std = pop_stats.get("entropy_std", 0.0)
@@ -17,6 +29,13 @@ def decide_label(signal_norm, abs_ratio, rel_gap, entropy, coherence, pop_stats,
         (coherence - pop_stats.get("coherence_mean", 0.0)) / coherence_std
         if coherence_std > 0 else 0.0
     )
+
+    if dc is not None and sr is not None:
+        if dc <= 0.18 and sr <= 0.20 and abs_ratio >= 0.72:
+            return "REJECT"
+
+        if dc >= 0.42 and abs_ratio <= 0.68 and coherence >= 0.26 and entropy <= 0.42:
+            return "NARROW"
 
     if abs_ratio >= 0.90 and entropy >= 0.78 and coherence <= 0.19:
         return "REJECT"

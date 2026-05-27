@@ -182,11 +182,24 @@ def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
     n_results = 40
 
     first_pass = _query_collection(query, chroma_filter=chroma_filter, n_results=n_results)
+    domain_metrics = _compute_domain_confidence(query, first_pass) if first_pass else {
+        "domain_confidence": 0.0,
+        "tech_ratio": 0.0,
+        "support_ratio": 0.0,
+        "ood_ratio": 1.0,
+        "supported_terms": [],
+        "unsupported_terms": [],
+        "mixed_domain": False,
+    }
+
+    for candidate in first_pass:
+        candidate.setdefault("query_debug", {})
+        candidate["query_debug"].update(domain_metrics)
+
     if not use_prf or not first_pass:
         return first_pass
 
     metrics = _compute_prf_gate_metrics(first_pass)
-    domain_metrics = _compute_domain_confidence(query, first_pass)
     entropy = metrics.get("ent_score_T0.1", 0.0)
     rel_gap = metrics.get("rel_gap", 1.0)
     domain_confidence = domain_metrics.get("domain_confidence", 0.0)

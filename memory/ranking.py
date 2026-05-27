@@ -245,6 +245,9 @@ def select_anchor(candidates, mode):
     all_distances = [c['distance'] for c in candidates]
     mean_distance = np.mean(all_distances)
     abs_ratio = best['min_distance'] / mean_distance if mean_distance > 0 else 1.0
+    query_debug = best['best_candidate'].get('query_debug', {})
+    domain_confidence = query_debug.get('domain_confidence')
+    support_ratio = query_debug.get('support_ratio')
 
     # --- Compute entropy over thread scores ---
     thread_scores = [t['thread_score'] for t in sorted_threads]
@@ -271,6 +274,8 @@ def select_anchor(candidates, mode):
         'n_threads': len(sorted_threads),
         'best_score': round(float(best['thread_score']), 4),
         'best_msgs': best['message_count'],
+        'domain_confidence': round(float(domain_confidence), 4) if isinstance(domain_confidence, (int, float)) else None,
+        'support_ratio': round(float(support_ratio), 4) if isinstance(support_ratio, (int, float)) else None,
     }
 
     # --- Decision rule: 4-class with z-score normalised thresholds ---
@@ -290,6 +295,8 @@ def select_anchor(candidates, mode):
                 "Z_ENTROPY_AMB_LO": Z_ENTROPY_AMB_LO,
                 "Z_ENTROPY_AMB_HI": Z_ENTROPY_AMB_HI,
             },
+            domain_confidence=domain_confidence,
+            support_ratio=support_ratio,
         )
 
         if label == "NARROW":
