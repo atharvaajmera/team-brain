@@ -23,15 +23,48 @@ def _estimate_confidence(intent, stats):
     coherence = _safe_float(stats.get("coherence"), 0.0)
     rel_gap = _safe_float(stats.get("rel_gap"), 0.0)
     abs_ratio = _safe_float(stats.get("abs_ratio"), 1.0)
+    domain_confidence = _safe_float(stats.get("domain_confidence"), 0.5)
+    support_ratio = _safe_float(stats.get("support_ratio"), 0.5)
 
     if intent == "NARROW":
-        score = (0.45 * rel_gap) + (0.30 * coherence) + (0.25 * (1.0 - entropy))
+        score = (
+            (0.28 * rel_gap)
+            + (0.20 * coherence)
+            + (0.18 * (1.0 - entropy))
+            + (0.18 * (1.0 - abs_ratio))
+            + (0.10 * domain_confidence)
+            + (0.06 * support_ratio)
+        )
+        score = 0.35 + (0.65 * score)
     elif intent == "AMBIGUOUS":
-        score = (0.35 * entropy) + (0.35 * coherence) + (0.30 * (1.0 - abs_ratio))
+        score = (
+            (0.24 * entropy)
+            + (0.22 * coherence)
+            + (0.20 * (1.0 - abs_ratio))
+            + (0.16 * (1.0 - rel_gap))
+            + (0.10 * domain_confidence)
+            + (0.08 * support_ratio)
+        )
+        score = 0.25 + (0.55 * score)
     elif intent == "BROAD":
-        score = (0.40 * entropy) + (0.30 * (1.0 - rel_gap)) + (0.30 * (1.0 - abs_ratio))
+        score = (
+            (0.28 * entropy)
+            + (0.22 * (1.0 - rel_gap))
+            + (0.18 * (1.0 - abs_ratio))
+            + (0.14 * coherence)
+            + (0.10 * domain_confidence)
+            + (0.08 * support_ratio)
+        )
+        score = 0.28 + (0.57 * score)
     else:
-        score = (0.40 * entropy) + (0.35 * (1.0 - coherence)) + (0.25 * abs_ratio)
+        score = (
+            (0.30 * entropy)
+            + (0.22 * (1.0 - coherence))
+            + (0.18 * abs_ratio)
+            + (0.16 * (1.0 - domain_confidence))
+            + (0.14 * (1.0 - support_ratio))
+        )
+        score = 0.20 + (0.65 * score)
 
     return _clamp(round(score, 2))
 
