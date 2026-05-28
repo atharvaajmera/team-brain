@@ -1,6 +1,7 @@
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from memory.decision_rules import decide_label
+from memory.prf import tokenize_prf_text
 
 def mmr_sort(query_embedding, candidate_embeddings, top_k=5, lambda_param=0.5):
     if len(candidate_embeddings) == 0:
@@ -131,6 +132,72 @@ def compute_semantic_coherence(embeddings, top_k=5):
 
     return float(np.mean(pairwise))
 
+
+def _thread_query_overlap(thread_candidates, query_terms):
+    if not query_terms:
+        return 0.0
+
+    thread_tokens = set()
+    for candidate in thread_candidates:
+        text = candidate.get("document") or candidate.get("metadata", {}).get("text", "")
+        thread_tokens.update(tokenize_prf_text(text))
+
+    if not thread_tokens:
+        return 0.0
+
+    overlap = len(thread_tokens.intersection(query_terms))
+    return overlap / len(query_terms)
+
+
+def _choose_query_terms(query_debug):
+    supported_terms = query_debug.get("supported_terms") or []
+    query_tokens = query_debug.get("query_tokens") or []
+
+    if len(supported_terms) >= 2:
+        return supported_terms
+    if supported_terms:
+        return supported_terms
+    return query_tokens
+
+
+def _select_relevant_diverse_threads(thread_aggregates, top_k, lambda_param, candidate_pool=None):
+    if not thread_aggregates or top_k <= 0:
+        return []
+
+    ranked = sorted(
+        thread_aggregates,
+        key=lambda thread: (-thread.get("query_overlap", 0.0), thread["thread_score"]),
+    )
+
+    strong_overlap = [thread for thread in ranked if thread.get("query_overlap", 0.0) >= 0.34]
+    weak_overlap = [thread for thread in ranked if thread.get("query_overlap", 0.0) < 0.34]
+
+    if len(strong_overlap) >= min(top_k, 2):
+        candidate_threads = strong_overlap + weak_overlap
+    elif strong_overlap:
+        candidate_threads = strong_overlap + weak_overlap
+    else:
+        candidate_threads = ranked
+
+    diverse = diversify_threads(
+        candidate_threads,
+        top_k=top_k,
+        lambda_param=lambda_param,
+        candidate_pool=candidate_pool,
+    )
+
+    if len(diverse) < top_k:
+        seen = {thread["thread_id"] for thread in diverse}
+        for thread in candidate_threads:
+            if thread["thread_id"] in seen:
+                continue
+            diverse.append(thread)
+            seen.add(thread["thread_id"])
+            if len(diverse) >= top_k:
+                break
+
+    return diverse[:top_k]
+
 import json as _json
 import os as _os
 
@@ -222,13 +289,17 @@ def select_anchor(candidates, mode):
         min_distance = np.min(thread_data['distances'])
         message_count = len(thread_data['candidates'])
         thread_score = avg_distance - np.log(message_count + 1) * ALPHA
+        query_debug = thread_data['candidates'][0].get('query_debug', {})
+        query_terms = _choose_query_terms(query_debug)
+        query_overlap = _thread_query_overlap(thread_data['candidates'], query_terms)
         thread_aggregates.append({
             'thread_id': thread_id,
             'avg_distance': avg_distance,
             'thread_score': thread_score,
             'min_distance': min_distance,
             'message_count': message_count,
-            'best_candidate': min(thread_data['candidates'], key=lambda x: x['distance'])
+            'best_candidate': min(thread_data['candidates'], key=lambda x: x['distance']),
+            'query_overlap': query_overlap,
         })
     
     sorted_threads = sorted(thread_aggregates, key=lambda x: x['thread_score'])
@@ -271,6 +342,7 @@ def select_anchor(candidates, mode):
         'rel_gap': round(rel_gap, 4),
         'entropy': round(entropy, 4),
         'coherence': round(coherence, 4),
+        'query_overlap': round(float(best.get('query_overlap', 0.0)), 4),
         'n_threads': len(sorted_threads),
         'best_score': round(float(best['thread_score']), 4),
         'best_msgs': best['message_count'],
@@ -308,7 +380,7 @@ def select_anchor(candidates, mode):
             }
 
         if label == "AMBIGUOUS":
-            top_threads = diversify_threads(
+            top_threads = _select_relevant_diverse_threads(
                 sorted_threads,
                 top_k=MAX_AMBIGUOUS_THREADS,
                 lambda_param=0.60,
@@ -322,7 +394,7 @@ def select_anchor(candidates, mode):
             }
 
         if label == "BROAD":
-            top_threads = diversify_threads(
+            top_threads = _select_relevant_diverse_threads(
                 sorted_threads,
                 top_k=MAX_BROAD_THREADS,
                 lambda_param=0.45,
