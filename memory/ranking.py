@@ -152,6 +152,29 @@ def _thread_query_overlap(thread_candidates, query_terms):
 def _choose_query_terms(query_debug):
     supported_terms = query_debug.get("supported_terms") or []
     query_tokens = query_debug.get("query_tokens") or []
+    ignored_terms = {
+        "issue",
+        "issues",
+        "problem",
+        "problems",
+        "update",
+        "updates",
+        "incident",
+        "incidents",
+        "related",
+        "latest",
+        "recent",
+        "current",
+        "seeing",
+        "show",
+        "give",
+        "tell",
+        "what",
+        "all",
+    }
+
+    supported_terms = [term for term in supported_terms if term not in ignored_terms]
+    query_tokens = [term for term in query_tokens if term not in ignored_terms]
 
     if len(supported_terms) >= 2:
         return supported_terms
@@ -170,12 +193,18 @@ def _select_relevant_diverse_threads(thread_aggregates, top_k, lambda_param, can
     )
 
     strong_overlap = [thread for thread in ranked if thread.get("query_overlap", 0.0) >= 0.34]
-    weak_overlap = [thread for thread in ranked if thread.get("query_overlap", 0.0) < 0.34]
+    medium_overlap = [
+        thread for thread in ranked
+        if 0.20 <= thread.get("query_overlap", 0.0) < 0.34
+    ]
+    weak_overlap = [thread for thread in ranked if thread.get("query_overlap", 0.0) < 0.20]
 
     if len(strong_overlap) >= min(top_k, 2):
-        candidate_threads = strong_overlap + weak_overlap
+        candidate_threads = strong_overlap + medium_overlap
     elif strong_overlap:
-        candidate_threads = strong_overlap + weak_overlap
+        candidate_threads = strong_overlap + medium_overlap
+    elif medium_overlap:
+        candidate_threads = medium_overlap
     else:
         candidate_threads = ranked
 
@@ -186,16 +215,19 @@ def _select_relevant_diverse_threads(thread_aggregates, top_k, lambda_param, can
         candidate_pool=candidate_pool,
     )
 
-    if len(diverse) < top_k:
+    min_required = min(top_k, len(strong_overlap) + len(medium_overlap))
+    if len(diverse) < min_required:
         seen = {thread["thread_id"] for thread in diverse}
         for thread in candidate_threads:
             if thread["thread_id"] in seen:
                 continue
             diverse.append(thread)
             seen.add(thread["thread_id"])
-            if len(diverse) >= top_k:
+            if len(diverse) >= min_required:
                 break
 
+    if strong_overlap or medium_overlap:
+        return diverse[:max(1, min_required)]
     return diverse[:top_k]
 
 import json as _json
@@ -350,6 +382,18 @@ def select_anchor(candidates, mode):
         'support_ratio': round(float(support_ratio), 4) if isinstance(support_ratio, (int, float)) else None,
     }
 
+    def _thread_debug_payload(selected_threads):
+        return [
+            {
+                "thread_id": thread["thread_id"],
+                "query_overlap": round(float(thread.get("query_overlap", 0.0)), 4),
+                "message_count": thread["message_count"],
+                "thread_score": round(float(thread["thread_score"]), 4),
+                "min_distance": round(float(thread["min_distance"]), 4),
+            }
+            for thread in selected_threads
+        ]
+
     # --- Decision rule: 4-class with z-score normalised thresholds ---
     def _decide():
         label = decide_label(
@@ -377,6 +421,7 @@ def select_anchor(candidates, mode):
                 'threads': [best['best_candidate']],
                 'thread_ids': [best['thread_id']],
                 'stats': stats,
+                'thread_debug': _thread_debug_payload([best]),
             }
 
         if label == "AMBIGUOUS":
@@ -391,6 +436,7 @@ def select_anchor(candidates, mode):
                 'threads': [t['best_candidate'] for t in top_threads],
                 'thread_ids': [t['thread_id'] for t in top_threads],
                 'stats': stats,
+                'thread_debug': _thread_debug_payload(top_threads),
             }
 
         if label == "BROAD":
@@ -405,6 +451,7 @@ def select_anchor(candidates, mode):
                 'threads': [t['best_candidate'] for t in top_threads],
                 'thread_ids': [t['thread_id'] for t in top_threads],
                 'stats': stats,
+                'thread_debug': _thread_debug_payload(top_threads),
             }
 
         top_threads = diversify_threads(
@@ -418,6 +465,7 @@ def select_anchor(candidates, mode):
             'threads': [t['best_candidate'] for t in top_threads],
             'thread_ids': [t['thread_id'] for t in top_threads],
             'stats': stats,
+            'thread_debug': _thread_debug_payload(top_threads),
         }
 
     return _decide()

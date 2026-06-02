@@ -63,4 +63,5 @@ def query_text_phase_2(query):
         "is_fallback": result['is_fallback'],
         "fallback_reason": result['fallback_reason'],
         "stats": result.get('stats', {}),
+        "thread_debug": result.get('thread_debug', []),
     }
