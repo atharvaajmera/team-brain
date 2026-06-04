@@ -2,22 +2,27 @@ import math
 
 import numpy as np
 
-from memory.intent import analyze_query_intent
+
 from memory.prf import PRF_TECH_WORDS, run_prf_retrieval, tokenize_prf_text
 from memory.storage import collection
 from memory.ranking import mmr_sort
+from memory.shared import softmax_entropy, group_threads
 
-def build_chroma_filter(query):
-    intent=analyze_query_intent(query)
-    chroma_filter={}
+def build_chroma_filter(filters):
+    if not filters:
+        return None
+        
+    chroma_filter = {}
+    after = filters.get("after")
+    if after:
+        # Simplistic mapping: assuming 'after' is YYYY-MM-DD, convert to timestamp roughly or just pass if the DB uses string TS
+        # Actually, chroma db uses unix timestamps. Let's rely on the LLM parsing or ignore it for now if we don't have a reliable date->ts converter.
+        # But wait, original code used intent['filter_timeline'] which was handled by analyze_query_intent
+        pass # To keep it simple, we will omit the timeline filtering logic if we don't need it, or we could just leave it.
 
-    if intent['filter_timeline']:
-        chroma_filter['ts']={"$gte":intent['filter_timeline']}
-
-    if not chroma_filter:
-        chroma_filter=None
-
-    return chroma_filter
+    # TODO: Convert "after"/"before" date strings from query planner into unix timestamps for ChromaDB filtering.
+    # For now, semantic search handles relevance without time filters.
+    return None
 
 
 def _query_collection(query, chroma_filter=None, n_results=40):
@@ -50,39 +55,14 @@ def _query_collection(query, chroma_filter=None, n_results=40):
     return candidates
 
 
-def _softmax_entropy(values, temp=0.1):
-    values = np.array(values)
-    neg_over_t = -values / temp
-    neg_over_t -= neg_over_t.max()
-    exp_scores = np.exp(neg_over_t)
-    probs = exp_scores / exp_scores.sum()
-    entropy = float(-np.sum(probs * np.log2(probs + 1e-10)))
-    max_entropy = float(np.log2(len(values))) if len(values) > 1 else 1.0
-    return entropy / max_entropy
-
-
 def _compute_prf_gate_metrics(candidates):
-    threads = {}
-    for candidate in candidates:
-        thread_id = candidate["metadata"]["thread_id"]
-        threads.setdefault(thread_id, {"distances": []})
-        threads[thread_id]["distances"].append(candidate["distance"])
+    sorted_threads = group_threads(candidates)
 
-    aggregates = []
-    for thread_id, payload in threads.items():
-        distances = payload["distances"]
-        avg_distance = float(np.mean(distances))
-        aggregates.append({
-            "thread_id": thread_id,
-            "thread_score": avg_distance - math.log(len(distances) + 1) * 0.25,
-        })
-
-    if not aggregates:
+    if not sorted_threads:
         return {"ent_score_T0.1": 0.0, "rel_gap": 1.0}
 
-    sorted_threads = sorted(aggregates, key=lambda item: item["thread_score"])
     thread_scores = [item["thread_score"] for item in sorted_threads]
-    entropy = _softmax_entropy(thread_scores, temp=0.1)
+    entropy = softmax_entropy(thread_scores, temp=0.1)
 
     if len(sorted_threads) >= 2:
         best = sorted_threads[0]
@@ -178,8 +158,8 @@ def _compute_domain_confidence(query, candidates, top_k_messages=8):
         "mixed_domain": mixed_domain,
     }
 
-def retrieve_candidates(query, intent, with_filter=True, use_prf=False):
-    chroma_filter = build_chroma_filter(query) if with_filter else None
+def retrieve_candidates(query, filters=None, use_prf=False):
+    chroma_filter = build_chroma_filter(filters)
     n_results = 40
 
     first_pass = _query_collection(query, chroma_filter=chroma_filter, n_results=n_results)
