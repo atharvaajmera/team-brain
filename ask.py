@@ -1,72 +1,13 @@
-from memory.decision import query_text_phase_2
-from memory.llm import generate_response
+import argparse
+
+from memory.decision import process_query
+from memory.llm import generate_response, build_context
+from memory.groq_client import generate_answer as cloud_generate_answer
 from memory.storage import collection
 
 
 def _tid_label(thread_id):
     return f"thread:{str(int(float(thread_id)))}"
-
-
-def _safe_float(value, default=0.0):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _clamp(value, low=0.0, high=1.0):
-    return max(low, min(high, value))
-
-
-def _estimate_confidence(intent, stats):
-    entropy = _safe_float(stats.get("entropy"), 0.0)
-    coherence = _safe_float(stats.get("coherence"), 0.0)
-    rel_gap = _safe_float(stats.get("rel_gap"), 0.0)
-    abs_ratio = _safe_float(stats.get("abs_ratio"), 1.0)
-    domain_confidence = _safe_float(stats.get("domain_confidence"), 0.5)
-    support_ratio = _safe_float(stats.get("support_ratio"), 0.5)
-
-    if intent == "NARROW":
-        score = (
-            (0.28 * rel_gap)
-            + (0.20 * coherence)
-            + (0.18 * (1.0 - entropy))
-            + (0.18 * (1.0 - abs_ratio))
-            + (0.10 * domain_confidence)
-            + (0.06 * support_ratio)
-        )
-        score = 0.35 + (0.65 * score)
-    elif intent == "AMBIGUOUS":
-        score = (
-            (0.24 * entropy)
-            + (0.22 * coherence)
-            + (0.20 * (1.0 - abs_ratio))
-            + (0.16 * (1.0 - rel_gap))
-            + (0.10 * domain_confidence)
-            + (0.08 * support_ratio)
-        )
-        score = 0.25 + (0.55 * score)
-    elif intent == "BROAD":
-        score = (
-            (0.28 * entropy)
-            + (0.22 * (1.0 - rel_gap))
-            + (0.18 * (1.0 - abs_ratio))
-            + (0.14 * coherence)
-            + (0.10 * domain_confidence)
-            + (0.08 * support_ratio)
-        )
-        score = 0.28 + (0.57 * score)
-    else:
-        score = (
-            (0.30 * entropy)
-            + (0.22 * (1.0 - coherence))
-            + (0.18 * abs_ratio)
-            + (0.16 * (1.0 - domain_confidence))
-            + (0.14 * (1.0 - support_ratio))
-        )
-        score = 0.20 + (0.65 * score)
-
-    return _clamp(round(score, 2))
 
 
 def _snippet(text, limit=120):
@@ -114,26 +55,91 @@ def _fallback_summary(intent, threads):
     return "I found several relevant discussions and grouped the strongest threads below."
 
 
-def _render_result(query, result):
-    intent = result["type"].upper()
-    stats = result.get("stats", {})
-    threads = result.get("threads", [])
-    confidence = _estimate_confidence(intent, stats)
+def _format_debug(result):
+    plan = result.get("plan", {})
+    scan = result.get("scan")
+    
+    lines = ["Debug:"]
+    lines.append(f"  Plan: {plan}")
+    if scan:
+        lines.append(f"  Scan: PII count={scan.total_pii_count}, High sensitivity={scan.high_sensitivity_found}")
+        if scan.findings:
+            lines.append(f"  Findings: {list(scan.findings.keys())}")
+            
+    return "\n".join(lines)
 
+
+def _format_profile(timings):
+    """Format step timings as a visual breakdown."""
+    total = timings.get("total", 0.001)
+    labels = [
+        ("plan",          "Query Planner (Groq)"),
+        ("retrieve",      "Vector Retrieval + PRF"),
+        ("rank",          "Ranking & MMR"),
+        ("fetch_threads", "Thread Fetch (ChromaDB)"),
+        ("privacy_scan",  "Privacy Scan"),
+        ("redact",        "Redaction"),
+        ("summary",       "Summary Generation"),
+    ]
+    lines = ["Profile:"]
+    lines.append(f"  {'Step':<28} {'Time':>8}  {'%':>5}  Bar")
+    lines.append(f"  {'─'*28} {'─'*8}  {'─'*5}  {'─'*20}")
+    for key, label in labels:
+        t = timings.get(key, 0)
+        pct = (t / total) * 100 if total > 0 else 0
+        bar_len = int(pct / 5)  # 20 chars = 100%
+        bar = "█" * bar_len + "░" * (20 - bar_len)
+        lines.append(f"  {label:<28} {t*1000:>7.0f}ms  {pct:>4.1f}%  {bar}")
+    lines.append(f"  {'─'*28} {'─'*8}  {'─'*5}  {'─'*20}")
+    lines.append(f"  {'TOTAL':<28} {total*1000:>7.0f}ms")
+    return "\n".join(lines)
+
+
+def _generate_summary(query, result, threads):
+    intent = result.get("action", "SEARCH")
+    route = result.get("route", "local")
+    
+    from time import perf_counter
+    t = perf_counter()
     try:
+        if route == "cloud":
+            context = build_context(threads)
+            summary = cloud_generate_answer(query, context).strip()
+            if summary:
+                elapsed = perf_counter() - t
+                return summary, False, elapsed
+                
+        # fallback to local
         summary = generate_response(query, intent, threads).strip()
-        if not summary:
-            summary = _fallback_summary(intent, threads)
-    except Exception:
-        summary = _fallback_summary(intent, threads)
+        if summary:
+            elapsed = perf_counter() - t
+            return summary, False, elapsed
+    except Exception as e:
+        print(f"[summary] Generation error: {e}")
+        pass
+        
+    elapsed = perf_counter() - t
+    return _fallback_summary(intent, threads), True, elapsed
+
+
+def _render_result(query, result, debug=False, profile=False):
+    intent = result.get("action", "SEARCH")
+    route = result.get("route", "local")
+    scan = result.get("scan")
+    threads = result.get("threads", [])
+    
+    summary, used_summary_fallback, summary_time = _generate_summary(query, result, threads)
 
     sections = [
         f"Intent: {intent}",
-        f"Confidence: {confidence:.2f}",
+        f"Route: {route.upper()}",
     ]
 
-    if result.get("is_fallback"):
-        sections.append(f"Fallback: {result.get('fallback_reason', 'retrieval fallback used')}")
+    if scan and scan.high_sensitivity_found:
+        sections.append("Privacy Warning: High sensitivity PII detected, forced local routing.")
+
+    if used_summary_fallback:
+        sections.append("Summary mode: fallback")
 
     if intent == "REJECT":
         sections.extend(
@@ -158,6 +164,15 @@ def _render_result(query, result):
             ]
         )
 
+    if debug:
+        sections.extend(["", _format_debug(result)])
+
+    if profile:
+        timings = result.get("timings", {})
+        timings["summary"] = summary_time
+        timings["total"] = timings.get("total", 0) + summary_time
+        sections.extend(["", _format_profile(timings)])
+
     return "\n".join(sections)
 
 
@@ -168,10 +183,51 @@ def _check_corpus_ready():
         return False
 
 
+def _print_no_result():
+    print(
+        "\n".join(
+            [
+                "Intent: REJECT",
+                "Route: LOCAL",
+                "",
+                "Summary:",
+                "I could not find relevant Slack discussions for that question.",
+                "",
+            ]
+        )
+    )
+
+
+def _run_query(user_query, debug=False, profile=False):
+    result = process_query(user_query)
+    if not result or result.get("action") == "REJECT":
+        _print_no_result()
+        return
+
+    print()
+    print(_render_result(user_query, result, debug=debug, profile=profile))
+    print()
+
+
+def _parse_args():
+    parser = argparse.ArgumentParser(description="Query the indexed Slack archive.")
+    parser.add_argument("query", nargs="*", help="Optional one-shot query.")
+    parser.add_argument("--debug", action="store_true", help="Show compact runtime debug stats.")
+    parser.add_argument("--profile", action="store_true", help="Show per-step timing breakdown.")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    args = _parse_args()
+
     if not _check_corpus_ready():
         print("No indexed Slack corpus was found. Build the local index first, then try again.")
         raise SystemExit(1)
+
+    one_shot_query = " ".join(args.query).strip()
+    if one_shot_query:
+        _run_query(one_shot_query, debug=args.debug, profile=args.profile)
+        raise SystemExit(0)
 
     print("Ask about your Slack archive. Type 'exit' to quit.")
 
@@ -183,23 +239,4 @@ if __name__ == "__main__":
             print("Exiting...")
             break
 
-        result = query_text_phase_2(user_query)
-        if not result:
-            print(
-                "\n".join(
-                    [
-                        "Intent: REJECT",
-                        "Confidence: 0.00",
-                        "",
-                        "Summary:",
-                        "I could not find relevant Slack discussions for that question.",
-                        "",
-                    ]
-                )
-            )
-            continue
-
-        print()
-        print(_render_result(user_query, result))
-        print()
-            
+        _run_query(user_query, debug=args.debug, profile=args.profile)
