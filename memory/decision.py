@@ -2,12 +2,12 @@
 
 from time import perf_counter
 from memory.query_planner import plan_query
-from memory.retrieval import retrieve_candidates
+from memory.retrieval import execute_semantic_search, execute_recent_threads
 from memory.privacy import scan_threads, redact_threads
-from memory.ranking import select_anchor
+from memory.shared import group_threads
 
 def process_query(query: str):
-    """Orchestrate intent planning, retrieval, and privacy routing."""
+    """Orchestrate tool-based planning, retrieval, and privacy routing."""
     timings = {}
     t0 = perf_counter()
 
@@ -15,9 +15,9 @@ def process_query(query: str):
     plan = plan_query(query)
     timings["plan"] = perf_counter() - t
 
-    action = plan["action"]
+    goal = plan.get("goal", "answer")
 
-    if action == "reject":
+    if goal == "reject":
         timings["total"] = perf_counter() - t0
         return {
             "action": "REJECT",
@@ -28,23 +28,43 @@ def process_query(query: str):
             "timings": timings,
         }
 
-    # Retrieve candidates based on the search query (or original query if none)
-    search_query = plan.get("search_query") or query
-    filters = plan.get("filters") or {}
-
     t = perf_counter()
-    candidates = retrieve_candidates(search_query, filters)
+    all_candidates = []
+    
+    for step in plan.get("retrieval_steps", []):
+        tool = step.get("tool")
+        step_query = step.get("query")
+        filters = step.get("filters", {})
+        limit = step.get("limit", 40)
+        
+        if tool in ("semantic_search", "author_search"):
+            candidates = execute_semantic_search(step_query or query, filters, limit=limit)
+            all_candidates.extend(candidates)
+        elif tool == "recent_threads":
+            candidates = execute_recent_threads(filters, limit=limit)
+            all_candidates.extend(candidates)
+            
     timings["retrieve"] = perf_counter() - t
 
     t = perf_counter()
-    anchor = select_anchor(candidates, mode="NORMAL")
+    
+    seen = set()
+    unique_candidates = []
+    for c in all_candidates:
+        if c["id"] not in seen:
+            seen.add(c["id"])
+            unique_candidates.append(c)
+            
+    sorted_threads = group_threads(unique_candidates)
+    
+    top_thread_ids = [t["thread_id"] for t in sorted_threads[:5]]
     timings["rank"] = perf_counter() - t
 
     t = perf_counter()
     threads = []
-    if anchor and "thread_ids" in anchor:
+    if top_thread_ids:
         from memory.storage import collection
-        for thread_id in anchor["thread_ids"]:
+        for thread_id in top_thread_ids:
             results = collection.get(where={"thread_id": thread_id})
             if not results["documents"]:
                 continue
@@ -78,7 +98,7 @@ def process_query(query: str):
     timings["total"] = perf_counter() - t0
 
     return {
-        "action": action.upper(),
+        "action": goal.upper(),
         "threads": final_threads,
         "route": scan.route,
         "scan": scan,

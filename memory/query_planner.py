@@ -18,29 +18,46 @@ Output ONLY valid JSON, no markdown fences, no explanation.
 
 Schema:
 {{
-  "action": "search" | "recent" | "summarize" | "reject",
-  "search_query": "semantic search string or null",
-  "filters": {{
-    "author": "username or null",
-    "after": "YYYY-MM-DD or null",
-    "before": "YYYY-MM-DD or null",
-    "limit": integer or null
-  }}
+    "goal": "answer" | "catch_up" | "analysis" | "clarify" | "reject",
+    "retrieval_steps": [
+        {{
+            "tool": "semantic_search" | "recent_threads" | "author_search",
+            "query": "search string (null if not needed)",
+            "filters": {{
+                "author": "username or null",
+                "after": "YYYY-MM-DD or null",
+                "before": "YYYY-MM-DD or null"
+            }},
+            "limit": integer
+        }}
+    ],
+    "answer_requirements": {{
+        "format": "direct" | "summary" | "timeline" | "comparison" | "decision",
+        "cite_sources": true
+    }}
 }}
 
-Action definitions:
-- "search": find specific conversations by topic/content (most common)
-- "recent": latest N messages, no semantic search needed
-- "summarize": summary of conversations, possibly filtered by topic/author/time
-- "reject": clearly unrelated to Slack (weather, jokes, etc.)
+Tool guidelines:
+- semantic_search: default for topic-based queries. Set query to the core topic.
+- recent_threads: use for "what happened today", "catch me up". No query needed.
+- author_search: use for "what did alice say?". Put username in filters.author, and topic in query.
 
-Rules:
-- For "search": set search_query to a clean version of what to search for
-- For "recent": set limit (default 10). search_query is null
-- For "summarize": set search_query to the topic if there is one
-- For time references: compute actual dates relative to today
-- For author mentions: extract just the name, lowercase
-- If vague but about Slack content, default to "search", not "reject"
+Format guidelines:
+- direct: concise answer
+- summary: thematic overview of a topic
+- timeline: chronological events
+- comparison: comparing multiple topics
+- decision: highlighting agreed outcomes
+
+Examples:
+User: "what happened with redis?"
+Output: {{"goal": "answer", "retrieval_steps": [{{"tool": "semantic_search", "query": "redis", "filters": {{}}, "limit": 40}}], "answer_requirements": {{"format": "summary", "cite_sources": true}}}}
+
+User: "catch me up on backend today"
+Output: {{"goal": "catch_up", "retrieval_steps": [{{"tool": "recent_threads", "query": null, "filters": {{"after": "{today}"}}, "limit": 40}}], "answer_requirements": {{"format": "timeline", "cite_sources": true}}}}
+
+User: "what did alice say about deploys?"
+Output: {{"goal": "answer", "retrieval_steps": [{{"tool": "author_search", "query": "deploys", "filters": {{"author": "alice"}}, "limit": 40}}], "answer_requirements": {{"format": "direct", "cite_sources": true}}}}
 
 Today's date: {today}
 """
@@ -48,8 +65,8 @@ Today's date: {today}
 
 def plan_query(user_query: str) -> dict:
     """Parse a user query into structured intent via Groq.
-    Returns dict with: action, search_query, filters.
-    Falls back to search on any error."""
+    Returns dict with: goal, retrieval_steps, answer_requirements.
+    Falls back to a semantic search plan on any error."""
     today = datetime.now().strftime("%Y-%m-%d")
     prompt = _SYSTEM_PROMPT.format(today=today)
 
@@ -58,7 +75,7 @@ def plan_query(user_query: str) -> dict:
             messages=[{"role": "user", "content": prompt + f"\n\nUser query: {user_query}"}],
             model=_MODEL,
             temperature=0.0,
-            max_tokens=256,
+            max_tokens=512,
             response_format={"type": "json_object"},
         )
 
@@ -70,24 +87,28 @@ def plan_query(user_query: str) -> dict:
         text = text.strip()
 
         parsed = json.loads(text)
-        action = parsed.get("action", "search")
-        if action not in ("search", "recent", "summarize", "reject"):
-            action = "search"
+        
+        # Safe clamp limits
+        for step in parsed.get("retrieval_steps", []):
+            limit = step.get("limit")
+            if not isinstance(limit, int):
+                step["limit"] = 40
+            else:
+                step["limit"] = min(max(limit, 1), 100)
 
-        return {
-            "action": action,
-            "search_query": parsed.get("search_query"),
-            "filters": {
-                "author": parsed.get("filters", {}).get("author"),
-                "after": parsed.get("filters", {}).get("after"),
-                "before": parsed.get("filters", {}).get("before"),
-                "limit": parsed.get("filters", {}).get("limit"),
-            },
-        }
+        return parsed
     except Exception as e:
         print(f"[query_planner] Groq call failed: {e}")
         return {
-            "action": "search",
-            "search_query": user_query,
-            "filters": {"author": None, "after": None, "before": None, "limit": None},
+            "goal": "answer",
+            "retrieval_steps": [{
+                "tool": "semantic_search",
+                "query": user_query,
+                "filters": {},
+                "limit": 40
+            }],
+            "answer_requirements": {
+                "format": "direct",
+                "cite_sources": True
+            }
         }
