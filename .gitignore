@@ -4,3 +4,4 @@ chroma_db/
 .env
 config/benchmark_queries.json
 config/parameters.json
+config/sync_state.json
