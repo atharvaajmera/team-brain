@@ -10,7 +10,10 @@ if str(REPO_ROOT) not in sys.path:
 import numpy as np
 from memory.storage import collection
 from memory.retrieval import retrieve_candidates
-from memory.intent import analyze_query_intent
+try:
+    from memory.intent import analyze_query_intent
+except ImportError:
+    analyze_query_intent = None
 from scripts.benchmark import (
     compute_metrics, decide, compute_population_stats,
     _group_threads, run_logreg_loo, MIN_THREAD_SIZE,

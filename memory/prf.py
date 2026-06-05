@@ -1,61 +1,11 @@
-import re
 from collections import Counter, defaultdict
 
-try:
-    from scripts.query_generator import _tokenize as generator_tokenize
-except Exception:
-    generator_tokenize = None
-
-PRF_STOPWORDS = {
-    "about", "after", "again", "against", "also", "another", "any", "are", "back",
-    "because", "been", "before", "being", "between", "both", "but", "could",
-    "does", "doing", "down", "during", "each", "even", "from", "further", "have",
-    "having", "into", "its", "just", "more", "most", "only", "other", "over",
-    "same", "some", "such", "than", "that", "their", "them", "then", "there",
-    "these", "they", "this", "those", "through", "under", "until", "very", "want",
-    "were", "what", "when", "where", "which", "while", "with", "would", "your",
-    "team", "thread", "message", "messages", "issue", "problem", "please", "help",
-    "need", "still", "getting", "cannot", "cant", "doesnt", "dont", "should",
-    "will", "today", "yesterday", "tomorrow", "thanks", "thank", "update",
-}
-
-PRF_TECH_WORDS = {
-    "oauth", "redis", "docker", "slack", "api", "auth", "token", "login", "deploy",
-    "deployment", "rollback", "staging", "production", "postgres", "mysql", "db",
-    "database", "migration", "cache", "caching", "worker", "queue", "lambda",
-    "s3", "kafka", "nginx", "gunicorn", "celery", "pagination", "dashboard",
-    "charts", "ci", "cd", "pipeline", "build", "release", "security", "vulnerability",
-    "patch", "docs", "documentation", "endpoint", "timeout", "latency", "bug",
-    "bugs", "error", "errors", "fix", "fixed", "failing", "fails", "failure",
-}
+from memory.shared import STOPWORDS as PRF_STOPWORDS, TECH_WORDS as PRF_TECH_WORDS, tokenize
 
 
 def tokenize_prf_text(text):
-    if generator_tokenize is not None:
-        return generator_tokenize(text)
-
-    if not text:
-        return []
-
-    tokens = re.findall(r"[a-z0-9][a-z0-9._/-]*", text.lower())
-    cleaned = []
-
-    for token in tokens:
-        token = token.strip("._/-")
-        if not token:
-            continue
-
-        is_number = token.isdigit()
-        is_tech = token in PRF_TECH_WORDS
-
-        if token in PRF_STOPWORDS and not is_tech:
-            continue
-        if len(token) <= 2 and not is_number and not is_tech:
-            continue
-
-        cleaned.append(token)
-
-    return cleaned
+    """Alias for shared.tokenize — kept for backward compatibility."""
+    return tokenize(text)
 
 
 def extract_expansion_terms(query, candidates, max_terms=4, top_k_messages=12):

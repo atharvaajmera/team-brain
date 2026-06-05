@@ -1,4 +1,4 @@
-﻿import argparse
+import argparse
 import json
 import math
 import os
@@ -14,15 +14,18 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import LeaveOneOut
-from memory.decision_rules import decide_label
+try:
+    from memory.decision_rules import decide_label
+except ImportError:
+    decide_label = None
 from memory.ranking import compute_semantic_coherence
 from memory.storage import collection
 from memory.retrieval import retrieve_candidates
-from memory.intent import analyze_query_intent
-
-ALPHA = 0.25
-ENTROPY_TEMP = 0.1
-MIN_THREAD_SIZE = 2
+try:
+    from memory.intent import analyze_query_intent
+except ImportError:
+    analyze_query_intent = None
+from memory.shared import softmax_entropy, group_threads, ALPHA, MIN_THREAD_SIZE
 
 # â”€â”€ Z-score thresholds (in std-dev units from population mean) â”€â”€
 Z_REL_GAP_HIGH   =  0.50   # NARROW: z(rel_gap) above this
@@ -37,41 +40,10 @@ DEFAULT_QUERIES_FILE = str(REPO_ROOT / "config" / "benchmark_queries.json")
 DEFAULT_PARAMS_FILE = str(REPO_ROOT / "config" / "parameters.json")
 
 
-def _group_threads(candidates):
-    threads = {}
-    for c in candidates:
-        tid = c['metadata']['thread_id']
-        threads.setdefault(tid, {'candidates': [], 'distances': []})
-        threads[tid]['candidates'].append(c)
-        threads[tid]['distances'].append(c['distance'])
-
-    aggregates = []
-    for tid, td in threads.items():
-        avg_d = float(np.mean(td['distances']))
-        aggregates.append({
-            'thread_id': tid,
-            'avg_distance': avg_d,
-            'min_distance': float(np.min(td['distances'])),
-            'message_count': len(td['candidates']),
-            'thread_score': avg_d - math.log(len(td['candidates']) + 1) * ALPHA,
-            'best_candidate': min(td['candidates'], key=lambda x: x['distance']),
-        })
-    return aggregates
-
-
-def _softmax_entropy(values, temp):
-    v = np.array(values)
-    neg_over_T = -v / temp
-    neg_over_T -= neg_over_T.max()
-    exp_s = np.exp(neg_over_T)
-    probs = exp_s / exp_s.sum()
-    ent = float(-np.sum(probs * np.log2(probs + 1e-10)))
-    max_ent = float(np.log2(len(v))) if len(v) > 1 else 1.0
-    return round(ent / max_ent, 4)
 
 
 def compute_metrics(candidates):
-    agg = _group_threads(candidates)
+    agg = group_threads(candidates)
 
     thread_dists = np.array([t['min_distance'] for t in agg])
     mean_d = float(np.mean(thread_dists))
@@ -138,16 +110,16 @@ def compute_metrics(candidates):
         top_k=5,
     )
 
-    m['ent_score_T0.1']   = _softmax_entropy(thread_scores, 0.1)
-    m['ent_score_T0.05']  = _softmax_entropy(thread_scores, 0.05)
-    m['ent_score_T0.2']   = _softmax_entropy(thread_scores, 0.2)
-    m['ent_mindist_T0.1'] = _softmax_entropy(min_dists, 0.1)
-    m['ent_avgdist_T0.1'] = _softmax_entropy(avg_dists, 0.1)
+    m['ent_score_T0.1']   = round(softmax_entropy(thread_scores, 0.1), 4)
+    m['ent_score_T0.05']  = round(softmax_entropy(thread_scores, 0.05), 4)
+    m['ent_score_T0.2']   = round(softmax_entropy(thread_scores, 0.2), 4)
+    m['ent_mindist_T0.1'] = round(softmax_entropy(min_dists, 0.1), 4)
+    m['ent_avgdist_T0.1'] = round(softmax_entropy(avg_dists, 0.1), 4)
 
     raw = np.array(min_dists)
     d_range = raw.max() - raw.min()
     normed = ((raw - raw.min()) / d_range).tolist() if d_range > 0 else [0.0] * len(raw)
-    m['ent_mindist_norm_T0.1'] = _softmax_entropy(normed, 0.1)
+    m['ent_mindist_norm_T0.1'] = round(softmax_entropy(normed, 0.1), 4)
     m['semantic_coherence_top5'] = round(coherence, 4)
 
     m['top3_threads'] = [int(t['thread_id']) for t in agg_by_score[:3]]
