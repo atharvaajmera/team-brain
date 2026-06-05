@@ -6,23 +6,42 @@ import numpy as np
 from memory.prf import PRF_TECH_WORDS, run_prf_retrieval, tokenize_prf_text
 from memory.storage import collection
 from memory.ranking import mmr_sort
+from datetime import datetime, timezone
 from memory.shared import softmax_entropy, group_threads
+
+def _date_to_ts(date_str, end_of_day=False):
+    if not date_str:
+        return None
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        if end_of_day:
+            dt = dt.replace(hour=23, minute=59, second=59)
+        return dt.replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        return None
 
 def build_chroma_filter(filters):
     if not filters:
         return None
         
-    chroma_filter = {}
-    after = filters.get("after")
-    if after:
-        # Simplistic mapping: assuming 'after' is YYYY-MM-DD, convert to timestamp roughly or just pass if the DB uses string TS
-        # Actually, chroma db uses unix timestamps. Let's rely on the LLM parsing or ignore it for now if we don't have a reliable date->ts converter.
-        # But wait, original code used intent['filter_timeline'] which was handled by analyze_query_intent
-        pass # To keep it simple, we will omit the timeline filtering logic if we don't need it, or we could just leave it.
-
-    # TODO: Convert "after"/"before" date strings from query planner into unix timestamps for ChromaDB filtering.
-    # For now, semantic search handles relevance without time filters.
-    return None
+    clauses = []
+    author = filters.get("author")
+    if author:
+        clauses.append({"author": {"$eq": author}})
+        
+    after_ts = _date_to_ts(filters.get("after"))
+    if after_ts:
+        clauses.append({"ts": {"$gte": after_ts}})
+        
+    before_ts = _date_to_ts(filters.get("before"), end_of_day=True)
+    if before_ts:
+        clauses.append({"ts": {"$lte": before_ts}})
+        
+    if not clauses:
+        return None
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$and": clauses}
 
 
 def _query_collection(query, chroma_filter=None, n_results=40):
@@ -158,9 +177,9 @@ def _compute_domain_confidence(query, candidates, top_k_messages=8):
         "mixed_domain": mixed_domain,
     }
 
-def retrieve_candidates(query, filters=None, use_prf=False):
+def execute_semantic_search(query, filters=None, limit=40, use_prf=False):
     chroma_filter = build_chroma_filter(filters)
-    n_results = 40
+    n_results = limit
 
     first_pass = _query_collection(query, chroma_filter=chroma_filter, n_results=n_results)
     domain_metrics = _compute_domain_confidence(query, first_pass) if first_pass else {
@@ -244,3 +263,31 @@ def retrieve_candidates(query, filters=None, use_prf=False):
             "expanded_queries": prf_result["expanded_queries"],
         })
     return merged
+
+
+def execute_recent_threads(filters=None, limit=10):
+    """Fetch the most recent messages by timestamp, no semantic search."""
+    chroma_filter = build_chroma_filter(filters)
+    
+    results = collection.get(
+        where=chroma_filter,
+        include=['documents', 'metadatas']
+    )
+    
+    if not results['documents']:
+        return []
+        
+    candidates = []
+    for doc, meta, id_ in zip(results['documents'], results['metadatas'], results['ids']):
+        candidates.append({
+            "id": id_,
+            "document": doc,
+            "metadata": meta,
+            "distance": 0.0,
+            "embedding": None
+        })
+        
+    # Sort by timestamp descending
+    candidates.sort(key=lambda x: float(x["metadata"].get("ts", 0)), reverse=True)
+    
+    return candidates[:limit]
