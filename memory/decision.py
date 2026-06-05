@@ -1,67 +1,87 @@
-from memory.intent import analyze_query_intent
+"""Main routing logic for user queries."""
+
+from time import perf_counter
+from memory.query_planner import plan_query
 from memory.retrieval import retrieve_candidates
+from memory.privacy import scan_threads, redact_threads
 from memory.ranking import select_anchor
-from memory.storage import collection
 
-def get_top_convo_id(query):
-    intent = analyze_query_intent(query)
-    timeline_filter = intent.get('timeline')
+def process_query(query: str):
+    """Orchestrate intent planning, retrieval, and privacy routing."""
+    timings = {}
+    t0 = perf_counter()
 
-    candidates = retrieve_candidates(query, intent, with_filter=True)
+    t = perf_counter()
+    plan = plan_query(query)
+    timings["plan"] = perf_counter() - t
 
-    result = select_anchor(candidates, mode="NORMAL")
+    action = plan["action"]
 
-    if result:
-        result['is_fallback'] = False
-        result['fallback_reason'] = None
-        return result
+    if action == "reject":
+        timings["total"] = perf_counter() - t0
+        return {
+            "action": "REJECT",
+            "threads": [],
+            "route": "local",
+            "scan": None,
+            "plan": plan,
+            "timings": timings,
+        }
 
-    # Fallback: retry without temporal filter
-    candidates = retrieve_candidates(query, intent, with_filter=False)
+    # Retrieve candidates based on the search query (or original query if none)
+    search_query = plan.get("search_query") or query
+    filters = plan.get("filters") or {}
 
-    result = select_anchor(candidates, mode="FALLBACK")
+    t = perf_counter()
+    candidates = retrieve_candidates(search_query, filters)
+    timings["retrieve"] = perf_counter() - t
 
-    if result:
-        fallback_reason = f"No results found for temporal filter '{timeline_filter}'" if timeline_filter else "No exact match found"
-        result['is_fallback'] = True
-        result['fallback_reason'] = fallback_reason
-        return result
+    t = perf_counter()
+    anchor = select_anchor(candidates, mode="NORMAL")
+    timings["rank"] = perf_counter() - t
 
-    return None
+    t = perf_counter()
+    threads = []
+    if anchor and "thread_ids" in anchor:
+        from memory.storage import collection
+        for thread_id in anchor["thread_ids"]:
+            results = collection.get(where={"thread_id": thread_id})
+            if not results["documents"]:
+                continue
 
-
-def query_text_phase_2(query):
-    result = get_top_convo_id(query)
-    if not result:
-        return None
-
-    all_thread_messages = []
-
-    for thread_id in result['thread_ids']:
-        results = collection.get(
-            where={"thread_id": thread_id}
-        )
-        if not results['documents']:
-            continue
-        
-        thread_msgs = []
-        for doc, metadata, id in zip(results['documents'], results['metadatas'], results['ids']):
-            thread_msgs.append({
-                "id": id,
-                "document": doc,
-                "metadata": metadata
+            thread_msgs = []
+            for doc, meta, doc_id in zip(results["documents"], results["metadatas"], results["ids"]):
+                thread_msgs.append({
+                    "id": doc_id,
+                    "document": doc,
+                    "metadata": meta
+                })
+            thread_msgs.sort(key=lambda x: float(x["metadata"]["ts"]))
+            threads.append({
+                "thread_id": thread_id,
+                "messages": thread_msgs
             })
-        thread_msgs.sort(key=lambda x: float(x['metadata']['ts']))
-        all_thread_messages.append({
-            "thread_id": thread_id,
-            "messages": thread_msgs
-        })
+    timings["fetch_threads"] = perf_counter() - t
+
+    # Privacy scan
+    t = perf_counter()
+    scan = scan_threads(query, threads)
+    timings["privacy_scan"] = perf_counter() - t
+
+    t = perf_counter()
+    if scan.route == "cloud":
+        final_threads = redact_threads(threads)
+    else:
+        final_threads = threads
+    timings["redact"] = perf_counter() - t
+
+    timings["total"] = perf_counter() - t0
 
     return {
-        "type": result['type'],
-        "threads": all_thread_messages,
-        "is_fallback": result['is_fallback'],
-        "fallback_reason": result['fallback_reason'],
-        "stats": result.get('stats', {}),
-        "thread_debug": result.get('thread_debug', []),
+        "action": action.upper(),
+        "threads": final_threads,
+        "route": scan.route,
+        "scan": scan,
+        "plan": plan,
+        "timings": timings,
     }
