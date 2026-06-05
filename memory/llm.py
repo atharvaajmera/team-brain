@@ -8,7 +8,17 @@ load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 MODEL = os.getenv("MODEL", "llama3.2")
 
-def _build_context(threads):
+def is_ollama_available(timeout=2):
+    """Quick health check: can we reach Ollama?"""
+    try:
+        health_url = OLLAMA_URL.replace("/api/generate", "")
+        resp = requests.get(health_url, timeout=timeout)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def build_context(threads):
     if not threads:
         return "(no relevant threads found)"
 
@@ -28,37 +38,22 @@ def _build_context(threads):
 
 
 def _build_prompt(query, category, context):
-    category_instructions = {
-        "NARROW": (
-            "The retrieval system found ONE highly relevant thread. "
-            "Answer the user's question using the thread below. Be specific and concise."
-        ),
-        "AMBIGUOUS": (
-            "The retrieval system found MULTIPLE possibly relevant threads. "
-            "Summarise what each thread covers and ask the user to clarify which one they mean, "
-            "or answer broadly if the threads are related."
-        ),
-        "BROAD": (
-            "The query is broad and touches multiple threads. "
-            "Provide a summary across all relevant threads. Highlight key themes."
-        ),
-        "REJECT": (
-            "The retrieved Slack threads are not clearly relevant enough to answer the user's question. "
-            "Do not summarize weakly related threads. Politely say that no relevant Slack evidence was found, "
-            "and suggest refining the question."
-        ),
-    }
+    """Build an LLM prompt for local answer generation.
 
-    instruction = category_instructions.get(category, category_instructions["REJECT"])
-
+    The category parameter is accepted for backward compatibility but is no
+    longer used — the LLM adapts its response style based on the retrieved
+    context itself.
+    """
     return (
-        f"You are a helpful assistant for a software engineering team. "
-        f"You answer questions based on archived Slack conversations.\n\n"
-        f"Category: {category}\n"
-        f"Instruction: {instruction}\n\n"
-        f"Important rule: If the retrieved threads are only loosely related to the user query, "
-        f"do not infer or fabricate an answer from them. Instead, clearly state that no relevant "
-        f"Slack evidence was found.\n\n"
+        "You are a helpful assistant for a software engineering team. "
+        "You answer questions based on archived Slack conversations.\n\n"
+        "Important rules:\n"
+        "- Base your answer ONLY on the provided Slack threads.\n"
+        "- If one thread clearly answers the question, be specific and concise.\n"
+        "- If multiple threads are relevant, summarize across them.\n"
+        "- If the threads are not relevant, say so clearly.\n"
+        "- Do not fabricate information.\n"
+        "- Reference specific authors and timestamps when useful.\n\n"
         f"--- Retrieved Slack threads ---\n{context}\n"
         f"--- End of threads ---\n\n"
         f"User question: {query}\n\n"
@@ -81,7 +76,7 @@ def _stream_response(payload):
 
 
 def generate_response(query, category, threads, stream=False):
-    context = _build_context(threads)
+    context = build_context(threads)
     prompt = _build_prompt(query, category, context)
 
     payload = {
