@@ -2,10 +2,10 @@ import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
+import sys
 from ingest import get_threads_from_channel
-from memory.storage import add_messages
-
-load_dotenv()
+from memory.storage import add_messages, reset_collection
+from memory.settings import settings
 
 REPO_ROOT = Path(__file__).resolve().parent
 SYNC_STATE_FILE = REPO_ROOT / "config" / "sync_state.json"
@@ -28,13 +28,23 @@ def _save_last_ts(ts):
 
 
 def builder(full_reindex=False):
-    CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID_AUTO")
-    last_ts = None if full_reindex else _load_last_ts()
+    CHANNEL_ID = settings.SLACK_CHANNEL_ID_AUTO
+    if not CHANNEL_ID:
+        print("Error: SLACK_CHANNEL_ID_AUTO environment variable is not set.")
+        sys.exit(1)
 
-    if last_ts:
-        print(f"Incremental sync: fetching messages after ts={last_ts}")
+    if full_reindex:
+        print("Full sync: wiping existing collection and fetching all messages")
+        reset_collection()
+        if SYNC_STATE_FILE.exists():
+            SYNC_STATE_FILE.unlink()
+        last_ts = None
     else:
-        print("Full sync: fetching all messages")
+        last_ts = _load_last_ts()
+        if last_ts:
+            print(f"Incremental sync: fetching messages after ts={last_ts}")
+        else:
+            print("Full sync: fetching all messages")
 
     messages = get_threads_from_channel(CHANNEL_ID, after_ts=last_ts)
     if not messages:
@@ -61,6 +71,7 @@ def builder(full_reindex=False):
         metadatas.append({
             "author": author, "ts": ts,
             "text": text, "thread_id": thread_id,
+            "channel_id": CHANNEL_ID,
         })
 
     if texts:

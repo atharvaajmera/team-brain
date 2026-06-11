@@ -15,3 +15,11 @@ collection = client.get_or_create_collection(name="slack_archive")
 def add_messages(texts, ids, metadatas):
     collection.upsert(documents=texts, ids=ids, metadatas=metadatas)
     print("Got the threads from ingest and added to memory.")
+
+def reset_collection():
+    global collection
+    try:
+        client.delete_collection(name="slack_archive")
+    except Exception:
+        pass
+    collection = client.get_or_create_collection(name="slack_archive")
