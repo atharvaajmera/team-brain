@@ -5,10 +5,9 @@ import os
 from datetime import datetime
 
 from groq import Groq
-from dotenv import load_dotenv
+from memory.settings import settings
 
-load_dotenv()
-_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+_client = Groq(api_key=settings.GROQ_API_KEY)
 _MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 _SYSTEM_PROMPT = """\
