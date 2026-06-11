@@ -27,6 +27,7 @@ class PrivacyScan:
     total_pii_count: int = 0
     route: str = "local"
     redacted_text: str = ""
+    redacted_query: str = ""
 
 
 def scan_text(text: str) -> PrivacyScan:
@@ -64,7 +65,10 @@ def scan_threads(query: str, threads: list) -> PrivacyScan:
             text = msg.get("document", "")
             author = msg.get("metadata", {}).get("author", "")
             parts.append(f"{author}: {text}")
-    return scan_text("\n".join(parts))
+            
+    scan_result = scan_text("\n".join(parts))
+    scan_result.redacted_query = redact(query)
+    return scan_result
 
 
 def redact_threads(threads: list) -> list:

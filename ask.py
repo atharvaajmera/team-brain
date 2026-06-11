@@ -1,4 +1,5 @@
 import argparse
+import json
 
 from memory.decision import process_query
 from memory.llm import generate_response, build_context
@@ -60,7 +61,15 @@ def _format_debug(result):
     scan = result.get("scan")
     
     lines = ["Debug:"]
-    lines.append(f"  Plan: {plan}")
+    lines.append(f"  Goal: {plan.get('goal', 'N/A')}")
+    lines.append(f"  Answer Reqs: {plan.get('answer_requirements', {})}")
+    lines.append("  Retrieval Steps:")
+    for step in plan.get("retrieval_steps", []):
+        lines.append(f"    - Tool: {step.get('tool')}")
+        lines.append(f"      Query: {step.get('query')}")
+        lines.append(f"      Filters: {step.get('filters')}")
+        lines.append(f"      Limit: {step.get('limit')}")
+
     if scan:
         lines.append(f"  Scan: PII count={scan.total_pii_count}, High sensitivity={scan.high_sensitivity_found}")
         if scan.findings:
@@ -98,19 +107,21 @@ def _format_profile(timings):
 def _generate_summary(query, result, threads):
     intent = result.get("action", "SEARCH")
     route = result.get("route", "local")
+    answer_reqs = result.get("plan", {}).get("answer_requirements", {})
     
     from time import perf_counter
     t = perf_counter()
     try:
         if route == "cloud":
+            safe_query = result.get("scan").redacted_query if result.get("scan") else query
             context = build_context(threads)
-            summary = cloud_generate_answer(query, context).strip()
+            summary = cloud_generate_answer(safe_query, context, answer_reqs).strip()
             if summary:
                 elapsed = perf_counter() - t
                 return summary, False, elapsed
                 
         # fallback to local
-        summary = generate_response(query, intent, threads).strip()
+        summary = generate_response(query, intent, threads, answer_reqs=answer_reqs).strip()
         if summary:
             elapsed = perf_counter() - t
             return summary, False, elapsed
@@ -198,10 +209,33 @@ def _print_no_result():
     )
 
 
-def _run_query(user_query, debug=False, profile=False):
+def _run_query(user_query, debug=False, profile=False, no_cloud=False, json_output=False):
     result = process_query(user_query)
+    
+    if no_cloud and result and "route" in result:
+        result["route"] = "local"
+        
     if not result or result.get("action") == "REJECT":
-        _print_no_result()
+        if json_output:
+            print(json.dumps({"intent": "REJECT", "route": "LOCAL", "summary": "I could not find relevant Slack discussions for that question."}))
+        else:
+            _print_no_result()
+        return
+
+    if json_output:
+        summary, _, summary_time = _generate_summary(user_query, result, result.get("threads", []))
+        if "timings" in result:
+            result["timings"]["summary"] = summary_time
+        out_data = {
+            "intent": result.get("action"),
+            "route": result.get("route"),
+            "summary": summary,
+            "threads": result.get("threads", []),
+            "plan": result.get("plan", {}),
+        }
+        if "timings" in result:
+            out_data["timings"] = result["timings"]
+        print(json.dumps(out_data))
         return
 
     print()
@@ -214,6 +248,8 @@ def _parse_args():
     parser.add_argument("query", nargs="*", help="Optional one-shot query.")
     parser.add_argument("--debug", action="store_true", help="Show compact runtime debug stats.")
     parser.add_argument("--profile", action="store_true", help="Show per-step timing breakdown.")
+    parser.add_argument("--no-cloud", action="store_true", help="Force all queries through local Ollama, never cloud.")
+    parser.add_argument("--json", action="store_true", help="Output result as JSON.")
     return parser.parse_args()
 
 
@@ -221,13 +257,20 @@ if __name__ == "__main__":
     args = _parse_args()
 
     if not _check_corpus_ready():
-        print("No indexed Slack corpus was found. Build the local index first, then try again.")
+        if args.json:
+            print(json.dumps({"error": "No indexed Slack corpus was found. Build the local index first."}))
+        else:
+            print("No indexed Slack corpus was found. Build the local index first, then try again.")
         raise SystemExit(1)
 
     one_shot_query = " ".join(args.query).strip()
     if one_shot_query:
-        _run_query(one_shot_query, debug=args.debug, profile=args.profile)
+        _run_query(one_shot_query, debug=args.debug, profile=args.profile, no_cloud=args.no_cloud, json_output=args.json)
         raise SystemExit(0)
+
+    if args.json:
+        print(json.dumps({"error": "JSON mode requires a one-shot query."}))
+        raise SystemExit(1)
 
     print("Ask about your Slack archive. Type 'exit' to quit.")
 
@@ -239,4 +282,4 @@ if __name__ == "__main__":
             print("Exiting...")
             break
 
-        _run_query(user_query, debug=args.debug, profile=args.profile)
+        _run_query(user_query, debug=args.debug, profile=args.profile, no_cloud=args.no_cloud, json_output=args.json)
