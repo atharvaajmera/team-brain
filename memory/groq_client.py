@@ -2,15 +2,20 @@
 
 import os
 from groq import Groq
-from dotenv import load_dotenv
+from memory.settings import settings
 
-load_dotenv()
-
-_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+_client = Groq(api_key=settings.GROQ_API_KEY)
 # Using the model we decided on
 _MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
-def generate_answer(query: str, context: str) -> str:
+def generate_answer(query: str, context: str, answer_reqs: dict = None) -> str:
+    answer_reqs = answer_reqs or {}
+    format_str = answer_reqs.get("format", "direct")
+    cite = answer_reqs.get("cite_sources", True)
+    
+    cite_rule = "- Cite the specific thread_id or author when making claims." if cite else "- No need for explicit citations."
+    format_rule = f"- Format your response as a {format_str}."
+
     prompt = (
         "You are a helpful assistant for a software engineering team. "
         "You answer questions based on archived Slack conversations.\n\n"
@@ -18,9 +23,8 @@ def generate_answer(query: str, context: str) -> str:
         "- Base your answer ONLY on the provided Slack threads.\n"
         "- If the threads are not relevant, say so clearly.\n"
         "- Do not fabricate information.\n"
-        "- If one thread clearly answers the question, be specific.\n"
-        "- If multiple threads are relevant, summarize across them.\n"
-        "- Reference specific authors and timestamps when useful.\n\n"
+        f"{cite_rule}\n"
+        f"{format_rule}\n\n"
         f"--- Retrieved Slack threads ---\n{context}\n"
         f"--- End of threads ---\n\n"
         f"User question: {query}\n\nAnswer:"

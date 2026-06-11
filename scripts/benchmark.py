@@ -17,10 +17,15 @@ from sklearn.model_selection import LeaveOneOut
 try:
     from memory.decision_rules import decide_label
 except ImportError:
-    decide_label = None
+    def decide_label(signal_norm, abs_ratio, rel_gap, entropy, coherence, pop_stats, thresholds):
+        if signal_norm > thresholds['Z_SIGNAL_BROAD']: return "BROAD"
+        if entropy < thresholds['Z_ENTROPY_LOW'] and rel_gap > thresholds['Z_REL_GAP_HIGH']: return "NARROW"
+        if (thresholds['Z_ENTROPY_AMB_LO'] <= entropy <= thresholds['Z_ENTROPY_AMB_HI'] and
+            thresholds['Z_REL_GAP_AMB_LO'] <= rel_gap <= thresholds['Z_REL_GAP_AMB_HI']): return "AMBIGUOUS"
+        return "REJECT"
 from memory.ranking import compute_semantic_coherence
 from memory.storage import collection
-from memory.retrieval import retrieve_candidates
+from memory.retrieval import execute_semantic_search
 try:
     from memory.intent import analyze_query_intent
 except ImportError:
@@ -180,11 +185,7 @@ def _extract_query_text(item):
             val = item.get(key)
             if isinstance(val, str) and val.strip():
                 return val.strip()
-
-    return ''
-
-
-def _load_queries_from_file(path):
+def _load_queries_from_file(path):
     if not os.path.exists(path):
         return []
 
@@ -201,14 +202,12 @@ def _load_queries_from_file(path):
             queries.append(q)
     return queries
 
-
 def calibrate_parameters(queries, with_filter=False):
     all_metrics = []
     total = len(queries)
 
     for i, query in enumerate(queries, start=1):
-        intent = analyze_query_intent(query)
-        candidates = retrieve_candidates(query, intent, with_filter=with_filter)
+        candidates = execute_semantic_search(query, filters=None, limit=40)
         if not candidates:
             print(f"[{i}/{total}] skipped (no candidates): {query}")
             continue

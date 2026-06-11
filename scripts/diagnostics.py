@@ -9,15 +9,16 @@ if str(REPO_ROOT) not in sys.path:
 
 import numpy as np
 from memory.storage import collection
-from memory.retrieval import retrieve_candidates
+from memory.retrieval import execute_semantic_search
 try:
     from memory.intent import analyze_query_intent
 except ImportError:
     analyze_query_intent = None
 from scripts.benchmark import (
     compute_metrics, decide, compute_population_stats,
-    _group_threads, run_logreg_loo, MIN_THREAD_SIZE,
+    run_logreg_loo
 )
+from memory.shared import group_threads, MIN_THREAD_SIZE
 
 DEFAULT_TEST_QUERIES_FILE = REPO_ROOT / "config" / "diagnostics_queries.json"
 
@@ -43,7 +44,7 @@ def _mrr(ranked_thread_ids, expected_tids):
 
 
 def _rank_threads(candidates):
-    agg = _group_threads(candidates)
+    agg = group_threads(candidates)
     agg_sorted = sorted(agg, key=lambda x: x["thread_score"])
     multi = [t for t in agg_sorted if t["message_count"] >= MIN_THREAD_SIZE]
     if multi:
@@ -191,8 +192,8 @@ def _evaluate_queries(test_queries, thread_corpus, use_prf=False):
         expected = item["expected"]
         desc = item["desc"]
 
-        intent = analyze_query_intent(query)
-        candidates = retrieve_candidates(query, intent, with_filter=False, use_prf=use_prf)
+        intent = analyze_query_intent(query) if analyze_query_intent else None
+        candidates = execute_semantic_search(query, filters=None, limit=40, use_prf=use_prf)
         if not candidates:
             continue
 

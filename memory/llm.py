@@ -1,12 +1,9 @@
 import requests
 import json
-import os
-from dotenv import load_dotenv
+from memory.settings import settings
 
-load_dotenv()
-
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
-MODEL = os.getenv("MODEL", "llama3.2")
+OLLAMA_URL = settings.OLLAMA_URL
+MODEL = settings.MODEL
 
 def is_ollama_available(timeout=2):
     """Quick health check: can we reach Ollama?"""
@@ -37,23 +34,24 @@ def build_context(threads):
     return "\n\n".join(parts)
 
 
-def _build_prompt(query, category, context):
-    """Build an LLM prompt for local answer generation.
+def _build_prompt(query, category, context, answer_reqs=None):
+    """Build an LLM prompt for local answer generation."""
+    answer_reqs = answer_reqs or {}
+    format_str = answer_reqs.get("format", "direct")
+    cite = answer_reqs.get("cite_sources", True)
+    
+    cite_rule = "- Cite the specific thread_id or author when making claims." if cite else "- No need for explicit citations."
+    format_rule = f"- Format your response as a {format_str}."
 
-    The category parameter is accepted for backward compatibility but is no
-    longer used — the LLM adapts its response style based on the retrieved
-    context itself.
-    """
     return (
         "You are a helpful assistant for a software engineering team. "
         "You answer questions based on archived Slack conversations.\n\n"
         "Important rules:\n"
         "- Base your answer ONLY on the provided Slack threads.\n"
-        "- If one thread clearly answers the question, be specific and concise.\n"
-        "- If multiple threads are relevant, summarize across them.\n"
         "- If the threads are not relevant, say so clearly.\n"
         "- Do not fabricate information.\n"
-        "- Reference specific authors and timestamps when useful.\n\n"
+        f"{cite_rule}\n"
+        f"{format_rule}\n\n"
         f"--- Retrieved Slack threads ---\n{context}\n"
         f"--- End of threads ---\n\n"
         f"User question: {query}\n\n"
@@ -75,9 +73,9 @@ def _stream_response(payload):
                 break
 
 
-def generate_response(query, category, threads, stream=False):
+def generate_response(query, category, threads, stream=False, answer_reqs=None):
     context = build_context(threads)
-    prompt = _build_prompt(query, category, context)
+    prompt = _build_prompt(query, category, context, answer_reqs)
 
     payload = {
         "model": MODEL,
