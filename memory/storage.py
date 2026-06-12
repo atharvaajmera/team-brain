@@ -1,3 +1,7 @@
+import os
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+os.environ["CHROMA_TELEMETRY_IMPL"] = "None"
+
 import chromadb
 from chromadb.config import Settings
 from pathlib import Path

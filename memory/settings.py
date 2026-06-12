@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from dotenv import load_dotenv
 
+
 # Load env vars once here
 load_dotenv()
 
