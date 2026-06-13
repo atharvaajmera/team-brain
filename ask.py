@@ -235,7 +235,14 @@ def _run_query(user_query, debug=False, profile=False, no_cloud=False, json_outp
         }
         if "timings" in result:
             out_data["timings"] = result["timings"]
-        print(json.dumps(out_data))
+        try:
+            import sys
+            json_bytes = json.dumps(out_data, ensure_ascii=False).encode("utf-8")
+            sys.stdout.buffer.write(json_bytes)
+            sys.stdout.buffer.write(b"\n")
+            sys.stdout.buffer.flush()
+        except OSError:
+            pass  # Handle broken pipe (e.g. piped to jq which doesn't exist)
         return
 
     print()

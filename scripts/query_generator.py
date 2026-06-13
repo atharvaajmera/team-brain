@@ -11,33 +11,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from memory.storage import collection
+from memory.shared import tokenize
 
 DEFAULT_OUTPUT = REPO_ROOT / "config" / "benchmark_queries.json"
 DEFAULT_MIN_PER_THREAD = 5
 DEFAULT_MAX_PER_THREAD = 10
-
-STOPWORDS = {
-    "the","about", "after", "again", "against", "also", "another", "any", "are", "back",
-    "because", "been", "before", "being", "between", "both", "but", "could",
-    "does", "doing", "down", "during", "each", "even", "from", "further", "have",
-    "having", "into", "its", "just", "more", "most", "only", "other", "over",
-    "same", "some", "such", "than", "that", "their", "them", "then", "there",
-    "these", "they", "this", "those", "through", "under", "until", "very", "want",
-    "were", "what", "when", "where", "which", "while", "with", "would", "your",
-    "team", "thread", "message", "messages", "issue", "problem", "please", "help",
-    "need", "still", "getting", "cannot", "cant", "doesnt", "dont", "should",
-    "will", "today", "yesterday", "tomorrow", "thanks", "thank", "update",
-}
-
-TECH_WORDS = {
-    "oauth", "redis", "docker", "slack", "api", "auth", "token", "login", "deploy",
-    "deployment", "rollback", "staging", "production", "postgres", "mysql", "db",
-    "database", "migration", "cache", "caching", "worker", "queue", "lambda",
-    "s3", "kafka", "nginx", "gunicorn", "celery", "pagination", "dashboard",
-    "charts", "ci", "cd", "pipeline", "build", "release", "security", "vulnerability",
-    "patch", "docs", "documentation", "endpoint", "timeout", "latency", "bug",
-    "bugs", "error", "errors", "fix", "fixed", "failing", "fails", "failure",
-}
 
 CODE_HINTS = (
     "error", "exception", "traceback", "failed", "failing", "timeout", "timed out",
@@ -52,31 +30,8 @@ FIX_HINTS = (
 
 
 def _tokenize(text):
-    if not text:
-        return []
-
-    tokens = re.findall(r"[a-z0-9][a-z0-9._/-]*", text.lower())
-    kept = []
-    seen = set()
-
-    for token in tokens:
-        token = token.strip("._/-")
-        if not token:
-            continue
-
-        is_number = token.isdigit()
-        is_tech = token in TECH_WORDS
-
-        if token in STOPWORDS and not is_tech:
-            continue
-        if len(token) <= 2 and not is_number and not is_tech:
-            continue
-
-        if token not in seen:
-            kept.append(token)
-            seen.add(token)
-
-    return kept
+    """Wrapper around shared.tokenize that removes duplicates (keeps order)."""
+    return list(dict.fromkeys(tokenize(text)))
 
 
 def _is_bad_query(query):
