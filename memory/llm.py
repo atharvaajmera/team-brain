@@ -19,6 +19,8 @@ def build_context(threads):
     if not threads:
         return "(no relevant threads found)"
 
+    from memory.citations import ts_to_readable, make_permalink
+
     parts = []
     for i, thread in enumerate(threads, 1):
         msgs = thread.get('messages', [])
@@ -28,8 +30,18 @@ def build_context(threads):
             user = meta.get('author', meta.get('user', 'unknown'))
             ts = meta.get('ts', '')
             text = msg.get('document', '')
-            lines.append(f"  @{user} [{ts}]: {text}")
-        parts.append(f"Thread {i} (id: {thread.get('thread_id', '?')}):\n" + "\n".join(lines))
+            readable_ts = ts_to_readable(ts)
+            channel_id = meta.get('channel_id', '')
+            permalink = make_permalink(channel_id, ts)
+            
+            if permalink:
+                lines.append(f"  @{user} [{readable_ts}] ({permalink}): {text}")
+            else:
+                lines.append(f"  @{user} [{readable_ts}]: {text}")
+        
+        thread_id = thread.get('thread_id', '?')
+        readable_thread_ts = ts_to_readable(thread_id)
+        parts.append(f"Thread {i} (started {readable_thread_ts}):\n" + "\n".join(lines))
 
     return "\n\n".join(parts)
 
@@ -40,7 +52,10 @@ def _build_prompt(query, category, context, answer_reqs=None):
     format_str = answer_reqs.get("format", "direct")
     cite = answer_reqs.get("cite_sources", True)
     
-    cite_rule = "- Cite the specific thread_id or author when making claims." if cite else "- No need for explicit citations."
+    cite_rule = (
+        "- When citing, reference the author and timestamp: e.g. '@alice (2026-05-03 14:30)'.\n"
+        "- If a Slack permalink is available in the thread data, include it."
+    ) if cite else "- No need for explicit citations."
     format_rule = f"- Format your response as a {format_str}."
 
     return (

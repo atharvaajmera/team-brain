@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 
 from memory.decision import process_query
 from memory.llm import generate_response, build_context
@@ -26,23 +27,45 @@ def _thread_title(thread):
 
 
 def _format_top_threads(threads):
+    from memory.citations import ts_to_readable, make_permalink
     lines = []
     for idx, thread in enumerate(threads, 1):
         title = _thread_title(thread)
-        lines.append(f"{idx}. {_tid_label(thread.get('thread_id', '?'))} - {title}")
+        thread_id = thread.get('thread_id', '?')
+        readable_ts = ts_to_readable(thread_id)
+        # Get channel_id from first message metadata if available
+        msgs = thread.get("messages", [])
+        channel_id = msgs[0].get("metadata", {}).get("channel_id", "") if msgs else ""
+        permalink = make_permalink(channel_id, thread_id)
+        
+        header = f"{idx}. [{readable_ts}]"
+        if permalink:
+            header += f" ({permalink})"
+        header += f" - {title}"
+        lines.append(header)
     return "\n".join(lines) if lines else "None"
 
 
 def _format_evidence(threads, max_threads=3, max_msgs=2):
+    from memory.citations import ts_to_readable, make_permalink
     lines = []
     for thread in threads[:max_threads]:
-        label = _tid_label(thread.get("thread_id", "?"))
+        thread_id = thread.get("thread_id", "?")
+        thread_ts = ts_to_readable(thread_id)
         for msg in thread.get("messages", [])[:max_msgs]:
             meta = msg.get("metadata", {})
             author = meta.get("author", meta.get("user", "unknown"))
             ts = meta.get("ts", "?")
+            channel_id = meta.get("channel_id", "")
+            readable_ts = ts_to_readable(ts)
+            permalink = make_permalink(channel_id, ts)
             snippet = _snippet(msg.get("document", ""), limit=110)
-            lines.append(f"- {label} @{author} [{ts}]: {snippet}")
+            
+            cite = f"- @{author} [{readable_ts}]"
+            if permalink:
+                cite += f" ({permalink})"
+            cite += f": {snippet}"
+            lines.append(cite)
     return "\n".join(lines) if lines else "- No supporting message snippets available."
 
 
@@ -70,6 +93,15 @@ def _format_debug(result):
         lines.append(f"      Filters: {step.get('filters')}")
         lines.append(f"      Limit: {step.get('limit')}")
 
+    # Show decomposition info for summarize queries
+    decomp = plan.get("_decomposition")
+    if decomp and decomp.get("decomposed"):
+        lines.append("  Decomposition:")
+        lines.append(f"    Reasoning: {decomp.get('reasoning', 'N/A')}")
+        lines.append(f"    Sub-queries:")
+        for i, sq in enumerate(decomp.get('sub_queries', []), 1):
+            lines.append(f"      {i}. {sq}")
+
     if scan:
         lines.append(f"  Scan: PII count={scan.total_pii_count}, High sensitivity={scan.high_sensitivity_found}")
         if scan.findings:
@@ -83,6 +115,7 @@ def _format_profile(timings):
     total = timings.get("total", 0.001)
     labels = [
         ("plan",          "Query Planner (Groq)"),
+        ("decompose",     "Query Decomposition"),
         ("retrieve",      "Vector Retrieval + PRF"),
         ("rank",          "Ranking & MMR"),
         ("fetch_threads", "Thread Fetch (ChromaDB)"),
@@ -236,7 +269,6 @@ def _run_query(user_query, debug=False, profile=False, no_cloud=False, json_outp
         if "timings" in result:
             out_data["timings"] = result["timings"]
         try:
-            import sys
             json_bytes = json.dumps(out_data, ensure_ascii=False).encode("utf-8")
             sys.stdout.buffer.write(json_bytes)
             sys.stdout.buffer.write(b"\n")
@@ -245,9 +277,12 @@ def _run_query(user_query, debug=False, profile=False, no_cloud=False, json_outp
             pass  # Handle broken pipe (e.g. piped to jq which doesn't exist)
         return
 
-    print()
-    print(_render_result(user_query, result, debug=debug, profile=profile))
-    print()
+    output = "\n" + _render_result(user_query, result, debug=debug, profile=profile) + "\n"
+    try:
+        sys.stdout.buffer.write(output.encode("utf-8"))
+        sys.stdout.buffer.flush()
+    except OSError:
+        pass
 
 
 def _parse_args():

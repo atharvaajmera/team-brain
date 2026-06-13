@@ -13,7 +13,10 @@ def generate_answer(query: str, context: str, answer_reqs: dict = None) -> str:
     format_str = answer_reqs.get("format", "direct")
     cite = answer_reqs.get("cite_sources", True)
     
-    cite_rule = "- Cite the specific thread_id or author when making claims." if cite else "- No need for explicit citations."
+    cite_rule = (
+        "- When citing, reference the author and timestamp: e.g. '@alice (2026-05-03 14:30)'.\n"
+        "- If a Slack permalink is available in the thread data, include it."
+    ) if cite else "- No need for explicit citations."
     format_rule = f"- Format your response as a {format_str}."
 
     prompt = (
