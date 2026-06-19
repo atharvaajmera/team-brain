@@ -70,7 +70,9 @@ def tokenize(text):
     if not text:
         return []
 
-    tokens = re.findall(r"[a-z0-9][a-z0-9._/-]*", text.lower())
+    # Use \w to support Unicode letters (CJK, Cyrillic, accented, etc.)
+    # Start with a letter/number [^\W_], followed by word chars or . _ / -
+    tokens = re.findall(r"[^\W_][\w._/-]*", text.lower())
     cleaned = []
 
     for token in tokens:
@@ -83,7 +85,7 @@ def tokenize(text):
 
         if token in STOPWORDS and not is_tech:
             continue
-        if len(token) <= 2 and not is_number and not is_tech:
+        if len(token) <= 2 and token.isascii() and not is_number and not is_tech:
             continue
 
         cleaned.append(token)
