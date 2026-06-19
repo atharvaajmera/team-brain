@@ -20,22 +20,31 @@ def _date_to_ts(date_str, end_of_day=False):
     except ValueError:
         return None
 
-def build_chroma_filter(filters):
-    if not filters:
+def build_chroma_filter(filters, allowed_channel_ids=None):
+    if not filters and not allowed_channel_ids:
         return None
         
     clauses = []
-    author = filters.get("author")
-    if author:
-        clauses.append({"author": {"$eq": author}})
-        
-    after_ts = _date_to_ts(filters.get("after"))
-    if after_ts:
-        clauses.append({"ts": {"$gte": after_ts}})
-        
-    before_ts = _date_to_ts(filters.get("before"), end_of_day=True)
-    if before_ts:
-        clauses.append({"ts": {"$lte": before_ts}})
+    
+    if filters:
+        author = filters.get("author")
+        if author:
+            norm_author = author.lower().replace(" ", "_")
+            clauses.append({"author": {"$eq": norm_author}})
+            
+        after_ts = _date_to_ts(filters.get("after"))
+        if after_ts:
+            clauses.append({"ts": {"$gte": after_ts}})
+            
+        before_ts = _date_to_ts(filters.get("before"), end_of_day=True)
+        if before_ts:
+            clauses.append({"ts": {"$lte": before_ts}})
+            
+    if allowed_channel_ids:
+        if len(allowed_channel_ids) == 1:
+            clauses.append({"channel_id": {"$eq": allowed_channel_ids[0]}})
+        else:
+            clauses.append({"channel_id": {"$in": allowed_channel_ids}})
         
     if not clauses:
         return None
@@ -177,8 +186,8 @@ def _compute_domain_confidence(query, candidates, top_k_messages=8):
         "mixed_domain": mixed_domain,
     }
 
-def execute_semantic_search(query, filters=None, limit=40, use_prf=False):
-    chroma_filter = build_chroma_filter(filters)
+def execute_semantic_search(query, filters=None, limit=40, use_prf=False, allowed_channel_ids=None):
+    chroma_filter = build_chroma_filter(filters, allowed_channel_ids=allowed_channel_ids)
     n_results = limit
 
     first_pass = _query_collection(query, chroma_filter=chroma_filter, n_results=n_results)
@@ -265,9 +274,9 @@ def execute_semantic_search(query, filters=None, limit=40, use_prf=False):
     return merged
 
 
-def execute_recent_threads(filters=None, limit=10):
+def execute_recent_threads(filters=None, limit=10, allowed_channel_ids=None):
     """Fetch the most recent messages by timestamp, no semantic search."""
-    chroma_filter = build_chroma_filter(filters)
+    chroma_filter = build_chroma_filter(filters, allowed_channel_ids=allowed_channel_ids)
     
     results = collection.get(
         where=chroma_filter,
