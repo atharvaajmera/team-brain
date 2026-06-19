@@ -1,5 +1,8 @@
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+import logging
+
+logger = logging.getLogger("ranking")
 from memory.prf import tokenize_prf_text
 from memory.shared import softmax_entropy, ALPHA, ENTROPY_TEMP, MIN_THREAD_SIZE
 
@@ -261,7 +264,7 @@ def _load_params():
             with open(_PARAMS_PATH) as f:
                 return {**_DEFAULTS, **_json.load(f)}
         except Exception as e:
-            print(f"[ranking] Warning: could not load {_PARAMS_PATH}: {e}")
+            logger.warning(f"[ranking] Warning: could not load {_PARAMS_PATH}: {e}")
     return dict(_DEFAULTS)
 
 _PARAMS = _load_params()

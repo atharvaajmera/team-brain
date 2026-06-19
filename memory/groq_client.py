@@ -1,8 +1,11 @@
 """Groq API wrapper for answer generation."""
 
 import os
+import logging
 from groq import Groq
 from memory.settings import settings
+
+logger = logging.getLogger("groq_client")
 
 _client = Groq(api_key=settings.GROQ_API_KEY)
 # Using the model we decided on
@@ -42,5 +45,5 @@ def generate_answer(query: str, context: str, answer_reqs: dict = None) -> str:
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"[groq_client] Generation failed: {e}")
+        logger.error(f"[groq_client] Generation failed: {e}")
         return ""

@@ -1,11 +1,13 @@
 """LLM-powered query planner using Groq API."""
 
 import json
-import os
+import logging
 from datetime import datetime
+from pydantic import ValidationError
 
 from groq import Groq
 from memory.settings import settings
+from memory.models import QueryPlan, RetrievalStep, AnswerRequirements
 
 _client = Groq(api_key=settings.GROQ_API_KEY)
 _MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -17,7 +19,7 @@ Output ONLY valid JSON, no markdown fences, no explanation.
 
 Schema:
 {{
-    "goal": "answer" | "catch_up" | "analysis" | "clarify" | "reject",
+    "goal": "answer" | "catch_up" | "summarize" | "analysis" | "clarify" | "reject",
     "retrieval_steps": [
         {{
             "tool": "semantic_search" | "recent_threads" | "author_search",
@@ -41,6 +43,12 @@ Tool guidelines:
 - recent_threads: use for "what happened today", "catch me up". No query needed.
 - author_search: use for "what did alice say?". Put username in filters.author, and topic in query.
 
+Goal guidelines:
+- answer: specific question about a topic (e.g. "what caused the redis outage?")
+- catch_up: temporal recency queries (e.g. "catch me up", "what happened today?")
+- summarize: broad overviews spanning multiple topics (e.g. "summarize all issues", "give an overview of backend problems", "what are all the things the team discussed?")
+- reject: off-topic or non-Slack queries (e.g. "tell me a joke", "what's the weather?")
+
 Format guidelines:
 - direct: concise answer
 - summary: thematic overview of a topic
@@ -58,13 +66,42 @@ Output: {{"goal": "catch_up", "retrieval_steps": [{{"tool": "recent_threads", "q
 User: "what did alice say about deploys?"
 Output: {{"goal": "answer", "retrieval_steps": [{{"tool": "author_search", "query": "deploys", "filters": {{"author": "alice"}}, "limit": 40}}], "answer_requirements": {{"format": "direct", "cite_sources": true}}}}
 
+User: "give me an overview of all the issues this week"
+Output: {{"goal": "summarize", "retrieval_steps": [{{"tool": "semantic_search", "query": "issues and problems", "filters": {{}}, "limit": 40}}], "answer_requirements": {{"format": "summary", "cite_sources": true}}}}
+
+User: "summarize everything the team discussed"
+Output: {{"goal": "summarize", "retrieval_steps": [{{"tool": "semantic_search", "query": "team discussions", "filters": {{}}, "limit": 40}}], "answer_requirements": {{"format": "summary", "cite_sources": true}}}}
+
 Today's date: {today}
 """
 
 
-def plan_query(user_query: str) -> dict:
+def _safe_fallback(user_query: str) -> QueryPlan:
+    return QueryPlan(
+        goal="answer",
+        retrieval_steps=[RetrievalStep(tool="semantic_search", query=user_query, limit=40)],
+        answer_requirements=AnswerRequirements(format="direct", cite_sources=True)
+    )
+
+def _apply_semantic_rules(plan: QueryPlan) -> QueryPlan:
+    if plan.goal == "reject":
+        plan.retrieval_steps = []
+    elif plan.goal == "clarify":
+        plan.retrieval_steps = []
+
+    for step in plan.retrieval_steps:
+        if step.tool == "recent_threads":
+            step.query = None
+        elif step.tool == "author_search" and not step.filters.author:
+            # If they picked author_search but no author, fallback to semantic search
+            step.tool = "semantic_search"
+
+    return plan
+
+
+def plan_query(user_query: str) -> QueryPlan:
     """Parse a user query into structured intent via Groq.
-    Returns dict with: goal, retrieval_steps, answer_requirements.
+    Returns a QueryPlan instance.
     Falls back to a semantic search plan on any error."""
     today = datetime.now().strftime("%Y-%m-%d")
     prompt = _SYSTEM_PROMPT.format(today=today)
@@ -86,28 +123,13 @@ def plan_query(user_query: str) -> dict:
         text = text.strip()
 
         parsed = json.loads(text)
-        
-        # Safe clamp limits
-        for step in parsed.get("retrieval_steps", []):
-            limit = step.get("limit")
-            if not isinstance(limit, int):
-                step["limit"] = 40
-            else:
-                step["limit"] = min(max(limit, 1), 100)
+        plan = QueryPlan.model_validate(parsed)
+        plan = _apply_semantic_rules(plan)
+        return plan
 
-        return parsed
+    except (json.JSONDecodeError, ValidationError) as e:
+        logging.warning(f"[query_planner] Validation failed: {e}")
+        return _safe_fallback(user_query)
     except Exception as e:
-        print(f"[query_planner] Groq call failed: {e}")
-        return {
-            "goal": "answer",
-            "retrieval_steps": [{
-                "tool": "semantic_search",
-                "query": user_query,
-                "filters": {},
-                "limit": 40
-            }],
-            "answer_requirements": {
-                "format": "direct",
-                "cite_sources": True
-            }
-        }
+        logging.error(f"[query_planner] Groq call failed: {e}")
+        return _safe_fallback(user_query)
