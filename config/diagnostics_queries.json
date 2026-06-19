@@ -1,485 +1,879 @@
 [
   {
     "query": "oauth token refresh returning 401 in staging",
-    "expected": "NARROW",
-    "expected_thread_terms": ["oauth", "refresh", "401", "staging"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "oauth",
+      "refresh",
+      "401",
+      "staging"
+    ],
     "desc": "OAuth refresh issue"
   },
   {
     "query": "staging oauth secret rotation problem",
-    "expected": "NARROW",
-    "expected_thread_terms": ["oauth", "secret", "staging", "vault"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "oauth",
+      "secret",
+      "staging",
+      "vault"
+    ],
     "desc": "OAuth secret rotation thread"
   },
   {
     "query": "google login redirect loop in prod",
-    "expected": "NARROW",
-    "expected_thread_terms": ["google", "login", "redirect", "callback"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "google",
+      "login",
+      "redirect",
+      "callback"
+    ],
     "desc": "Google login redirect loop"
   },
   {
     "query": "orders endpoint slow full table scan",
-    "expected": "NARROW",
-    "expected_thread_terms": ["orders", "table", "scan", "index"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "orders",
+      "table",
+      "scan",
+      "index"
+    ],
     "desc": "Orders query performance issue"
   },
   {
     "query": "db migration rollback after failed deploy",
-    "expected": "NARROW",
-    "expected_thread_terms": ["migration", "rollback", "deploy", "constraint"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "migration",
+      "rollback",
+      "deploy",
+      "constraint"
+    ],
     "desc": "Database migration rollback"
   },
   {
     "query": "github actions integration tests timeout",
-    "expected": "NARROW",
-    "expected_thread_terms": ["builds", "integration", "parallel", "runners"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "builds",
+      "integration",
+      "parallel",
+      "runners"
+    ],
     "desc": "CI build timeout"
   },
   {
     "query": "docker image size blew up after charting library",
-    "expected": "NARROW",
-    "expected_thread_terms": ["docker", "image", "multi-stage", "node_modules"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "docker",
+      "image",
+      "multi-stage",
+      "node_modules"
+    ],
     "desc": "Docker image size thread"
   },
   {
     "query": "react hydration mismatch on product detail page",
-    "expected": "NARROW",
-    "expected_thread_terms": ["hydration", "locale", "currency", "formatter"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "hydration",
+      "locale",
+      "currency",
+      "formatter"
+    ],
     "desc": "React hydration mismatch"
   },
   {
     "query": "background worker memory leak oom killed",
-    "expected": "NARROW",
-    "expected_thread_terms": ["worker", "memory", "oom", "retry"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "worker",
+      "memory",
+      "oom",
+      "retry"
+    ],
     "desc": "Worker memory leak"
   },
   {
     "query": "lodash vulnerability prototype pollution fix",
-    "expected": "NARROW",
-    "expected_thread_terms": ["lodash", "vulnerability", "prototype", "dependabot"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "lodash",
+      "vulnerability",
+      "prototype",
+      "dependabot"
+    ],
     "desc": "Lodash vulnerability thread"
   },
   {
     "query": "aws api key exposed in git history",
-    "expected": "NARROW",
-    "expected_thread_terms": ["aws", "key", "git", "detect-secrets"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "aws",
+      "key",
+      "git",
+      "detect-secrets"
+    ],
     "desc": "Exposed API key thread"
   },
   {
     "query": "redis cache eviction and ttl compression",
-    "expected": "NARROW",
-    "expected_thread_terms": ["cache", "evictions", "ttl", "compression"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "cache",
+      "evictions",
+      "ttl",
+      "compression"
+    ],
     "desc": "Redis cache eviction thread"
   },
   {
     "query": "kubernetes crashloopbackoff memory limit fix",
-    "expected": "NARROW",
-    "expected_thread_terms": ["crashloopbackoff", "oomkilled", "memory", "512"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "crashloopbackoff",
+      "oomkilled",
+      "memory",
+      "512"
+    ],
     "desc": "Kubernetes pod crash loop"
   },
   {
     "query": "sprint planning q2 estimates blockers",
-    "expected": "NARROW",
-    "expected_thread_terms": ["sprint", "planning", "estimates", "blockers"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "sprint",
+      "planning",
+      "estimates",
+      "blockers"
+    ],
     "desc": "Sprint planning thread"
   },
   {
     "query": "on call handoff runbook entries missing",
-    "expected": "NARROW",
-    "expected_thread_terms": ["handoff", "runbook", "incident", "search index"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "handoff",
+      "runbook",
+      "incident",
+      "search index"
+    ],
     "desc": "On-call handoff issue"
   },
   {
     "query": "ios push notifications apns certificate issue",
-    "expected": "NARROW",
-    "expected_thread_terms": ["ios", "push", "apns", "certificate"],
+    "expected": "answer",
+    "expected_thread_terms": [
+      "ios",
+      "push",
+      "apns",
+      "certificate"
+    ],
     "desc": "iOS push notification delivery"
   },
-
   {
     "query": "what api login issues are we seeing",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["oauth", "refresh", "staging"],
-      ["google", "login", "redirect"]
+      [
+        "oauth",
+        "refresh",
+        "staging"
+      ],
+      [
+        "google",
+        "login",
+        "redirect"
+      ]
     ],
     "desc": "Two auth/login related threads"
   },
   {
     "query": "authentication and redirect bugs",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["oauth", "refresh", "401"],
-      ["google", "redirect", "callback"]
+      [
+        "oauth",
+        "refresh",
+        "401"
+      ],
+      [
+        "google",
+        "redirect",
+        "callback"
+      ]
     ],
     "desc": "Ambiguous auth issue"
   },
   {
     "query": "deployment failures and rollback incidents",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["migration", "rollback", "deploy"],
-      ["docker", "image", "multi-stage"]
+      [
+        "migration",
+        "rollback",
+        "deploy"
+      ],
+      [
+        "docker",
+        "image",
+        "multi-stage"
+      ]
     ],
     "desc": "Deploy-related ambiguity"
   },
   {
     "query": "build and deploy pipeline problems",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["builds", "integration", "parallel"],
-      ["docker", "image", "copy"]
+      [
+        "builds",
+        "integration",
+        "parallel"
+      ],
+      [
+        "docker",
+        "image",
+        "copy"
+      ]
     ],
     "desc": "CI and container build ambiguity"
   },
   {
     "query": "memory and cache performance issues",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["worker", "memory", "oom"],
-      ["cache", "evictions", "ttl"]
+      [
+        "worker",
+        "memory",
+        "oom"
+      ],
+      [
+        "cache",
+        "evictions",
+        "ttl"
+      ]
     ],
     "desc": "Worker/cache ambiguity"
   },
   {
     "query": "security fixes and secret leaks",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["lodash", "vulnerability", "dependabot"],
-      ["aws", "key", "git"]
+      [
+        "lodash",
+        "vulnerability",
+        "dependabot"
+      ],
+      [
+        "aws",
+        "key",
+        "git"
+      ]
     ],
     "desc": "Security ambiguity"
   },
   {
     "query": "frontend rendering and login problems",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["hydration", "locale", "currency"],
-      ["google", "login", "redirect"]
+      [
+        "hydration",
+        "locale",
+        "currency"
+      ],
+      [
+        "google",
+        "login",
+        "redirect"
+      ]
     ],
     "desc": "Frontend/auth ambiguity"
   },
   {
     "query": "database and orders query issues",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["orders", "scan", "index"],
-      ["migration", "rollback", "constraint"]
+      [
+        "orders",
+        "scan",
+        "index"
+      ],
+      [
+        "migration",
+        "rollback",
+        "constraint"
+      ]
     ],
     "desc": "Database ambiguity"
   },
   {
     "query": "mobile delivery and frontend formatting bugs",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["ios", "push", "apns"],
-      ["hydration", "locale", "formatter"]
+      [
+        "ios",
+        "push",
+        "apns"
+      ],
+      [
+        "hydration",
+        "locale",
+        "formatter"
+      ]
     ],
     "desc": "Mobile/frontend ambiguity"
   },
   {
     "query": "infra slowdown and pod memory problems",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["cache", "evictions", "compression"],
-      ["crashloopbackoff", "memory", "512"]
+      [
+        "cache",
+        "evictions",
+        "compression"
+      ],
+      [
+        "crashloopbackoff",
+        "memory",
+        "512"
+      ]
     ],
     "desc": "Infra ambiguity"
   },
   {
     "query": "team planning and handoff process issues",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["sprint", "planning", "estimates"],
-      ["handoff", "runbook", "incident"]
+      [
+        "sprint",
+        "planning",
+        "estimates"
+      ],
+      [
+        "handoff",
+        "runbook",
+        "incident"
+      ]
     ],
     "desc": "Process ambiguity"
   },
   {
     "query": "staging auth and production login failures",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["oauth", "staging", "vault"],
-      ["google", "prod", "callback"]
+      [
+        "oauth",
+        "staging",
+        "vault"
+      ],
+      [
+        "google",
+        "prod",
+        "callback"
+      ]
     ],
     "desc": "Auth ambiguity"
   },
   {
     "query": "pipeline timeout versus docker build bloat",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["integration", "parallel", "runners"],
-      ["docker", "node_modules", "multi-stage"]
+      [
+        "integration",
+        "parallel",
+        "runners"
+      ],
+      [
+        "docker",
+        "node_modules",
+        "multi-stage"
+      ]
     ],
     "desc": "Build ambiguity"
   },
   {
     "query": "secret rotation and exposed key incidents",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["oauth", "secret", "vault"],
-      ["aws", "key", "history"]
+      [
+        "oauth",
+        "secret",
+        "vault"
+      ],
+      [
+        "aws",
+        "key",
+        "history"
+      ]
     ],
     "desc": "Secrets ambiguity"
   },
   {
     "query": "api performance and cache stability issues",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["orders", "index", "latency"],
-      ["cache", "evictions", "responses"]
+      [
+        "orders",
+        "index",
+        "latency"
+      ],
+      [
+        "cache",
+        "evictions",
+        "responses"
+      ]
     ],
     "desc": "Performance ambiguity"
   },
   {
     "query": "runtime memory and retry queue issues",
-    "expected": "AMBIGUOUS",
+    "expected": "clarify",
     "expected_thread_terms": [
-      ["worker", "memory", "retry"],
-      ["crashloopbackoff", "oomkilled", "memory"]
+      [
+        "worker",
+        "memory",
+        "retry"
+      ],
+      [
+        "crashloopbackoff",
+        "oomkilled",
+        "memory"
+      ]
     ],
     "desc": "Memory ambiguity"
   },
-
   {
     "query": "give me all recent operational updates across teams",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["migration", "rollback"],
-      ["builds", "integration", "failed"],
-      ["sprint", "planning"]
+      [
+        "migration",
+        "rollback"
+      ],
+      [
+        "builds",
+        "integration",
+        "failed"
+      ],
+      [
+        "sprint",
+        "planning"
+      ]
     ],
     "desc": "Broad updates across database, CI, and planning"
   },
   {
     "query": "summarize all infrastructure and devops updates",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["docker", "image", "multi-stage"],
-      ["cache", "evictions", "ttl"],
-      ["crashloopbackoff", "memory", "512"]
+      [
+        "docker",
+        "image",
+        "multi-stage"
+      ],
+      [
+        "cache",
+        "evictions",
+        "ttl"
+      ],
+      [
+        "crashloopbackoff",
+        "memory",
+        "512"
+      ]
     ],
     "desc": "Infra broad query"
   },
   {
     "query": "what happened across security topics lately",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["lodash", "vulnerability", "dependabot"],
-      ["aws", "key", "git"],
-      ["detect-secrets", "pre-commit"]
+      [
+        "lodash",
+        "vulnerability",
+        "dependabot"
+      ],
+      [
+        "aws",
+        "key",
+        "git"
+      ],
+      [
+        "detect-secrets",
+        "pre-commit"
+      ]
     ],
     "desc": "Security broad query"
   },
   {
     "query": "give me engineering updates across backend frontend and mobile",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["orders", "index", "latency"],
-      ["hydration", "locale", "formatter"],
-      ["ios", "push", "apns"]
+      [
+        "orders",
+        "index",
+        "latency"
+      ],
+      [
+        "hydration",
+        "locale",
+        "formatter"
+      ],
+      [
+        "ios",
+        "push",
+        "apns"
+      ]
     ],
     "desc": "Cross-platform broad query"
   },
   {
     "query": "summarize all auth and access related updates",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["oauth", "refresh", "401"],
-      ["google", "login", "redirect"],
-      ["aws", "key", "revoked"]
+      [
+        "oauth",
+        "refresh",
+        "401"
+      ],
+      [
+        "google",
+        "login",
+        "redirect"
+      ],
+      [
+        "aws",
+        "key",
+        "revoked"
+      ]
     ],
     "desc": "Auth/security broad query"
   },
   {
     "query": "what were the main reliability issues across the system",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["worker", "oom", "retry"],
-      ["cache", "evictions", "ttl"],
-      ["crashloopbackoff", "oomkilled", "memory"]
+      [
+        "worker",
+        "oom",
+        "retry"
+      ],
+      [
+        "cache",
+        "evictions",
+        "ttl"
+      ],
+      [
+        "crashloopbackoff",
+        "oomkilled",
+        "memory"
+      ]
     ],
     "desc": "Reliability broad query"
   },
   {
     "query": "give me all deployment and release related updates",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["migration", "rollback", "deploy"],
-      ["docker", "image", "multi-stage"],
-      ["builds", "integration", "parallel"]
+      [
+        "migration",
+        "rollback",
+        "deploy"
+      ],
+      [
+        "docker",
+        "image",
+        "multi-stage"
+      ],
+      [
+        "builds",
+        "integration",
+        "parallel"
+      ]
     ],
     "desc": "Release broad query"
   },
   {
     "query": "summarize all team process and planning discussions",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["sprint", "planning", "estimates"],
-      ["handoff", "runbook", "incident"],
-      ["qa", "buffer", "week 3"]
+      [
+        "sprint",
+        "planning",
+        "estimates"
+      ],
+      [
+        "handoff",
+        "runbook",
+        "incident"
+      ],
+      [
+        "qa",
+        "buffer",
+        "week 3"
+      ]
     ],
     "desc": "Process broad query"
   },
   {
     "query": "what changed across performance and scaling topics",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["orders", "scan", "index"],
-      ["cache", "evictions", "responses"],
-      ["worker", "memory", "320"]
+      [
+        "orders",
+        "scan",
+        "index"
+      ],
+      [
+        "cache",
+        "evictions",
+        "responses"
+      ],
+      [
+        "worker",
+        "memory",
+        "320"
+      ]
     ],
     "desc": "Performance broad query"
   },
   {
     "query": "summarize current platform incidents and fixes",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["oauth", "refresh", "fixed"],
-      ["migration", "rollback", "stable"],
-      ["cache", "hit rate", "normal"]
+      [
+        "oauth",
+        "refresh",
+        "fixed"
+      ],
+      [
+        "migration",
+        "rollback",
+        "stable"
+      ],
+      [
+        "cache",
+        "hit rate",
+        "normal"
+      ]
     ],
     "desc": "Incident broad query"
   },
   {
     "query": "what are the important app reliability updates this week",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["worker", "oom", "stable"],
-      ["push", "delivery", "98"],
-      ["cache", "usage", "67"]
+      [
+        "worker",
+        "oom",
+        "stable"
+      ],
+      [
+        "push",
+        "delivery",
+        "98"
+      ],
+      [
+        "cache",
+        "usage",
+        "67"
+      ]
     ],
     "desc": "App reliability broad query"
   },
   {
     "query": "show me all the major fixes across services",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["oauth", "working", "again"],
-      ["image", "310", "normal"],
-      ["pod", "stable", "uptime"]
+      [
+        "oauth",
+        "working",
+        "again"
+      ],
+      [
+        "image",
+        "310",
+        "normal"
+      ],
+      [
+        "pod",
+        "stable",
+        "uptime"
+      ]
     ],
     "desc": "Broad fixes query"
   },
   {
     "query": "give me broad updates across auth data and infra",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["oauth", "staging", "401"],
-      ["orders", "created_at", "index"],
-      ["crashloopbackoff", "512", "stable"]
+      [
+        "oauth",
+        "staging",
+        "401"
+      ],
+      [
+        "orders",
+        "created_at",
+        "index"
+      ],
+      [
+        "crashloopbackoff",
+        "512",
+        "stable"
+      ]
     ],
     "desc": "Auth/data/infra broad query"
   },
   {
     "query": "summarize engineering changes across multiple threads",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["google", "redirect", "smoke tests"],
-      ["integration", "parallel", "8 min"],
-      ["runbook", "incident", "checklist"]
+      [
+        "google",
+        "redirect",
+        "smoke tests"
+      ],
+      [
+        "integration",
+        "parallel",
+        "8 min"
+      ],
+      [
+        "runbook",
+        "incident",
+        "checklist"
+      ]
     ],
     "desc": "Multi-thread broad query"
   },
   {
     "query": "what discussions span several backend and ops topics",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["migration", "constraint", "downtime"],
-      ["cache", "allkeys-lru", "ttl"],
-      ["worker", "memray", "dataframe"]
+      [
+        "migration",
+        "constraint",
+        "downtime"
+      ],
+      [
+        "cache",
+        "allkeys-lru",
+        "ttl"
+      ],
+      [
+        "worker",
+        "memray",
+        "dataframe"
+      ]
     ],
     "desc": "Backend/ops broad query"
   },
   {
     "query": "give me a broad summary of active technical topics",
-    "expected": "BROAD",
+    "expected": "summarize",
     "expected_thread_terms": [
-      ["hydration", "locale", "en-us"],
-      ["lodash", "prototype", "pollution"],
-      ["ios", "apns", "certificate"]
+      [
+        "hydration",
+        "locale",
+        "en-us"
+      ],
+      [
+        "lodash",
+        "prototype",
+        "pollution"
+      ],
+      [
+        "ios",
+        "apns",
+        "certificate"
+      ]
     ],
     "desc": "General technical broad query"
   },
-
   {
     "query": "tell me details about a random movie release",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "No matching engineering thread"
   },
   {
     "query": "who won the football match yesterday",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Sports query should reject"
   },
   {
     "query": "best pizza place near downtown",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Local restaurant query should reject"
   },
   {
     "query": "weather forecast for mumbai this weekend",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Weather query should reject"
   },
   {
     "query": "stock price prediction for tesla next month",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Finance prediction query should reject"
   },
   {
     "query": "explain the plot of interstellar",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Movie plot query should reject"
   },
   {
     "query": "best exercises for lower back pain",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Medical advice query should reject"
   },
   {
     "query": "how to bake a chocolate cake",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Cooking query should reject"
   },
   {
     "query": "translate this sentence to spanish",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Translation query should reject"
   },
   {
     "query": "latest fashion trends for summer",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Fashion query should reject"
   },
   {
     "query": "famous tourist places in japan",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Travel query should reject"
   },
   {
     "query": "tips for learning guitar fast",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Music learning query should reject"
   },
   {
     "query": "how many moons does saturn have",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Astronomy query should reject"
   },
   {
     "query": "wedding decoration ideas on a budget",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Event planning query should reject"
   },
   {
     "query": "how to train for a marathon",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Fitness query should reject"
   },
   {
     "query": "best novels to read this year",
-    "expected": "REJECT",
+    "expected": "reject",
     "desc": "Books query should reject"
   }
 ]

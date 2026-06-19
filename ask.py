@@ -2,10 +2,7 @@ import argparse
 import json
 import sys
 
-from memory.decision import process_query
-from memory.llm import generate_response, build_context
-from memory.groq_client import generate_answer as cloud_generate_answer
-from memory.storage import collection
+from memory.service import answer_query, is_corpus_ready
 
 
 def _tid_label(thread_id):
@@ -46,42 +43,20 @@ def _format_top_threads(threads):
     return "\n".join(lines) if lines else "None"
 
 
-def _format_evidence(threads, max_threads=3, max_msgs=2):
-    from memory.citations import ts_to_readable, make_permalink
+def _format_evidence(citations):
     lines = []
-    for thread in threads[:max_threads]:
-        thread_id = thread.get("thread_id", "?")
-        thread_ts = ts_to_readable(thread_id)
-        for msg in thread.get("messages", [])[:max_msgs]:
-            meta = msg.get("metadata", {})
-            author = meta.get("author", meta.get("user", "unknown"))
-            ts = meta.get("ts", "?")
-            channel_id = meta.get("channel_id", "")
-            readable_ts = ts_to_readable(ts)
-            permalink = make_permalink(channel_id, ts)
-            snippet = _snippet(msg.get("document", ""), limit=110)
-            
-            cite = f"- @{author} [{readable_ts}]"
-            if permalink:
-                cite += f" ({permalink})"
-            cite += f": {snippet}"
-            lines.append(cite)
+    for cite in citations:
+        line = f"- @{cite.author} [{cite.readable_ts}]"
+        if cite.permalink:
+            line += f" ({cite.permalink})"
+        line += f": {cite.snippet}"
+        lines.append(line)
     return "\n".join(lines) if lines else "- No supporting message snippets available."
 
 
-def _fallback_summary(intent, threads):
-    if intent == "REJECT" or not threads:
-        return "I could not find relevant Slack discussions for that question."
-    if intent == "NARROW":
-        return f"The most relevant discussion is {_tid_label(threads[0].get('thread_id', '?'))}."
-    if intent == "AMBIGUOUS":
-        return "I found multiple plausible discussions. The top threads below show the strongest candidates."
-    return "I found several relevant discussions and grouped the strongest threads below."
-
-
 def _format_debug(result):
-    plan = result.get("plan", {})
-    scan = result.get("scan")
+    plan = result.plan
+    debug = result.debug
     
     lines = ["Debug:"]
     lines.append(f"  Goal: {plan.get('goal', 'N/A')}")
@@ -94,7 +69,7 @@ def _format_debug(result):
         lines.append(f"      Limit: {step.get('limit')}")
 
     # Show decomposition info for summarize queries
-    decomp = plan.get("_decomposition")
+    decomp = result.timings.get("_decomposition")
     if decomp and decomp.get("decomposed"):
         lines.append("  Decomposition:")
         lines.append(f"    Reasoning: {decomp.get('reasoning', 'N/A')}")
@@ -102,10 +77,13 @@ def _format_debug(result):
         for i, sq in enumerate(decomp.get('sub_queries', []), 1):
             lines.append(f"      {i}. {sq}")
 
-    if scan:
-        lines.append(f"  Scan: PII count={scan.total_pii_count}, High sensitivity={scan.high_sensitivity_found}")
+    if debug:
+        scan = debug.scan
+        evidence = debug.evidence
+        lines.append(f"  Scan: PII count={scan.pii_count}, High sensitivity={scan.high_sensitivity}")
         if scan.findings:
-            lines.append(f"  Findings: {list(scan.findings.keys())}")
+            lines.append(f"  Findings: {scan.findings}")
+        lines.append(f"  Evidence: confidence={evidence.confidence:.2f}, reason={evidence.reason}")
             
     return "\n".join(lines)
 
@@ -137,101 +115,54 @@ def _format_profile(timings):
     return "\n".join(lines)
 
 
-def _generate_summary(query, result, threads):
-    intent = result.get("action", "SEARCH")
-    route = result.get("route", "local")
-    answer_reqs = result.get("plan", {}).get("answer_requirements", {})
-    
-    from time import perf_counter
-    t = perf_counter()
-    try:
-        if route == "cloud":
-            safe_query = result.get("scan").redacted_query if result.get("scan") else query
-            context = build_context(threads)
-            summary = cloud_generate_answer(safe_query, context, answer_reqs).strip()
-            if summary:
-                elapsed = perf_counter() - t
-                return summary, False, elapsed
-                
-        # fallback to local
-        summary = generate_response(query, intent, threads, answer_reqs=answer_reqs).strip()
-        if summary:
-            elapsed = perf_counter() - t
-            return summary, False, elapsed
-    except Exception as e:
-        print(f"[summary] Generation error: {e}")
-        pass
-        
-    elapsed = perf_counter() - t
-    return _fallback_summary(intent, threads), True, elapsed
-
-
-def _render_result(query, result, debug=False, profile=False):
-    intent = result.get("action", "SEARCH")
-    route = result.get("route", "local")
-    scan = result.get("scan")
-    threads = result.get("threads", [])
-    
-    summary, used_summary_fallback, summary_time = _generate_summary(query, result, threads)
-
+def _render_result(result, debug=False, profile=False):
     sections = [
-        f"Intent: {intent}",
-        f"Route: {route.upper()}",
+        f"Goal: {result.goal.upper()}",
+        f"Route: {result.route.upper()}",
     ]
-
-    if scan and scan.high_sensitivity_found:
-        sections.append("Privacy Warning: High sensitivity PII detected, forced local routing.")
-
-    if used_summary_fallback:
-        sections.append("Summary mode: fallback")
-
-    if intent == "REJECT":
-        sections.extend(
-            [
-                "",
-                "Summary:",
-                summary,
-            ]
-        )
+    
+    if result.status == "clarify":
+        sections.extend([
+            "",
+            "Clarification Needed:",
+            result.clarification_question,
+            "",
+            "Top Threads (for context):",
+            _format_top_threads(result.threads)
+        ])
+    elif result.status == "reject":
+        sections.extend([
+            "",
+            "Summary:",
+            result.answer,
+        ])
     else:
-        sections.extend(
-            [
-                "",
-                "Top Threads:",
-                _format_top_threads(threads),
-                "",
-                "Summary:",
-                summary,
-                "",
-                "Evidence:",
-                _format_evidence(threads),
-            ]
-        )
+        sections.extend([
+            "",
+            "Top Threads:",
+            _format_top_threads(result.threads),
+            "",
+            "Summary:",
+            result.answer,
+            "",
+            "Evidence:",
+            _format_evidence(result.citations),
+        ])
 
     if debug:
         sections.extend(["", _format_debug(result)])
 
     if profile:
-        timings = result.get("timings", {})
-        timings["summary"] = summary_time
-        timings["total"] = timings.get("total", 0) + summary_time
-        sections.extend(["", _format_profile(timings)])
+        sections.extend(["", _format_profile(result.timings)])
 
     return "\n".join(sections)
-
-
-def _check_corpus_ready():
-    try:
-        return collection.count() > 0
-    except Exception:
-        return False
 
 
 def _print_no_result():
     print(
         "\n".join(
             [
-                "Intent: REJECT",
+                "Goal: REJECT",
                 "Route: LOCAL",
                 "",
                 "Summary:",
@@ -243,41 +174,29 @@ def _print_no_result():
 
 
 def _run_query(user_query, debug=False, profile=False, no_cloud=False, json_output=False):
-    result = process_query(user_query)
-    
-    if no_cloud and result and "route" in result:
-        result["route"] = "local"
+    result = answer_query(user_query, source="cli", no_cloud=no_cloud, debug=debug)
         
-    if not result or result.get("action") == "REJECT":
-        if json_output:
-            print(json.dumps({"intent": "REJECT", "route": "LOCAL", "summary": "I could not find relevant Slack discussions for that question."}))
-        else:
-            _print_no_result()
-        return
-
     if json_output:
-        summary, _, summary_time = _generate_summary(user_query, result, result.get("threads", []))
-        if "timings" in result:
-            result["timings"]["summary"] = summary_time
         out_data = {
-            "intent": result.get("action"),
-            "route": result.get("route"),
-            "summary": summary,
-            "threads": result.get("threads", []),
-            "plan": result.get("plan", {}),
+            "status": result.status,
+            "goal": result.goal,
+            "route": result.route,
+            "answer": result.answer,
+            "clarification_question": result.clarification_question,
+            "threads": result.threads,
+            "plan": result.plan,
+            "timings": result.timings,
         }
-        if "timings" in result:
-            out_data["timings"] = result["timings"]
         try:
             json_bytes = json.dumps(out_data, ensure_ascii=False).encode("utf-8")
             sys.stdout.buffer.write(json_bytes)
             sys.stdout.buffer.write(b"\n")
             sys.stdout.buffer.flush()
         except OSError:
-            pass  # Handle broken pipe (e.g. piped to jq which doesn't exist)
+            pass
         return
 
-    output = "\n" + _render_result(user_query, result, debug=debug, profile=profile) + "\n"
+    output = "\n" + _render_result(result, debug=debug, profile=profile) + "\n"
     try:
         sys.stdout.buffer.write(output.encode("utf-8"))
         sys.stdout.buffer.flush()
@@ -298,7 +217,7 @@ def _parse_args():
 if __name__ == "__main__":
     args = _parse_args()
 
-    if not _check_corpus_ready():
+    if not is_corpus_ready():
         if args.json:
             print(json.dumps({"error": "No indexed Slack corpus was found. Build the local index first."}))
         else:
@@ -325,3 +244,4 @@ if __name__ == "__main__":
             break
 
         _run_query(user_query, debug=args.debug, profile=args.profile, no_cloud=args.no_cloud, json_output=args.json)
+

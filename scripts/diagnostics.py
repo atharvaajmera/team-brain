@@ -98,8 +98,8 @@ def _normalize_expected_term_groups(value):
 
 
 def _resolve_expected_threads(item, thread_corpus):
-    expected = str(item.get("expected", "")).strip().upper()
-    if expected == "REJECT":
+    expected = str(item.get("expected", "")).strip().lower()
+    if expected == "reject":
         return []
 
     explicit_ids = item.get("expected_thread_ids", [])
@@ -170,7 +170,7 @@ def _load_test_queries(path=DEFAULT_TEST_QUERIES_FILE):
         if not isinstance(item, dict):
             continue
         query = str(item.get("query", "")).strip()
-        expected = str(item.get("expected", "")).strip().upper()
+        expected = str(item.get("expected", "")).strip().lower()
         desc = str(item.get("desc", "")).strip()
         if not query or not expected:
             continue
@@ -205,7 +205,7 @@ def _evaluate_queries(test_queries, thread_corpus, use_prf=False):
         expected_tids = _resolve_expected_threads(item, thread_corpus)
         ranked_tids = _rank_threads(candidates)
 
-        if expected != "REJECT" and not expected_tids:
+        if expected != "reject" and not expected_tids:
             print(f"  Warning: no expected threads resolved for '{query}'")
 
         m["expected_threads"] = expected_tids
