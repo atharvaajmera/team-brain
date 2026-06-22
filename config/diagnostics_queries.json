@@ -8,7 +8,9 @@
       "401",
       "staging"
     ],
-    "desc": "OAuth refresh issue"
+    "desc": "OAuth refresh issue",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "staging oauth secret rotation problem",
@@ -19,7 +21,9 @@
       "staging",
       "vault"
     ],
-    "desc": "OAuth secret rotation thread"
+    "desc": "OAuth secret rotation thread",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "google login redirect loop in prod",
@@ -30,7 +34,9 @@
       "redirect",
       "callback"
     ],
-    "desc": "Google login redirect loop"
+    "desc": "Google login redirect loop",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "orders endpoint slow full table scan",
@@ -41,7 +47,9 @@
       "scan",
       "index"
     ],
-    "desc": "Orders query performance issue"
+    "desc": "Orders query performance issue",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "db migration rollback after failed deploy",
@@ -52,7 +60,9 @@
       "deploy",
       "constraint"
     ],
-    "desc": "Database migration rollback"
+    "desc": "Database migration rollback",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "github actions integration tests timeout",
@@ -63,7 +73,9 @@
       "parallel",
       "runners"
     ],
-    "desc": "CI build timeout"
+    "desc": "CI build timeout",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "docker image size blew up after charting library",
@@ -74,7 +86,9 @@
       "multi-stage",
       "node_modules"
     ],
-    "desc": "Docker image size thread"
+    "desc": "Docker image size thread",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "react hydration mismatch on product detail page",
@@ -85,7 +99,9 @@
       "currency",
       "formatter"
     ],
-    "desc": "React hydration mismatch"
+    "desc": "React hydration mismatch",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "background worker memory leak oom killed",
@@ -96,7 +112,9 @@
       "oom",
       "retry"
     ],
-    "desc": "Worker memory leak"
+    "desc": "Worker memory leak",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "lodash vulnerability prototype pollution fix",
@@ -107,7 +125,9 @@
       "prototype",
       "dependabot"
     ],
-    "desc": "Lodash vulnerability thread"
+    "desc": "Lodash vulnerability thread",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "aws api key exposed in git history",
@@ -118,7 +138,9 @@
       "git",
       "detect-secrets"
     ],
-    "desc": "Exposed API key thread"
+    "desc": "Exposed API key thread",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "redis cache eviction and ttl compression",
@@ -129,7 +151,9 @@
       "ttl",
       "compression"
     ],
-    "desc": "Redis cache eviction thread"
+    "desc": "Redis cache eviction thread",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "kubernetes crashloopbackoff memory limit fix",
@@ -140,7 +164,9 @@
       "memory",
       "512"
     ],
-    "desc": "Kubernetes pod crash loop"
+    "desc": "Kubernetes pod crash loop",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "sprint planning q2 estimates blockers",
@@ -151,7 +177,9 @@
       "estimates",
       "blockers"
     ],
-    "desc": "Sprint planning thread"
+    "desc": "Sprint planning thread",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "on call handoff runbook entries missing",
@@ -162,7 +190,9 @@
       "incident",
       "search index"
     ],
-    "desc": "On-call handoff issue"
+    "desc": "On-call handoff issue",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "ios push notifications apns certificate issue",
@@ -173,7 +203,9 @@
       "apns",
       "certificate"
     ],
-    "desc": "iOS push notification delivery"
+    "desc": "iOS push notification delivery",
+    "expected_goal": "answer",
+    "expected_status": "ok"
   },
   {
     "query": "what api login issues are we seeing",
@@ -190,7 +222,9 @@
         "redirect"
       ]
     ],
-    "desc": "Two auth/login related threads"
+    "desc": "Two auth/login related threads",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "authentication and redirect bugs",
@@ -207,7 +241,9 @@
         "callback"
       ]
     ],
-    "desc": "Ambiguous auth issue"
+    "desc": "Ambiguous auth issue",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "deployment failures and rollback incidents",
@@ -224,7 +260,9 @@
         "multi-stage"
       ]
     ],
-    "desc": "Deploy-related ambiguity"
+    "desc": "Deploy-related ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "build and deploy pipeline problems",
@@ -241,7 +279,9 @@
         "copy"
       ]
     ],
-    "desc": "CI and container build ambiguity"
+    "desc": "CI and container build ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "memory and cache performance issues",
@@ -258,7 +298,9 @@
         "ttl"
       ]
     ],
-    "desc": "Worker/cache ambiguity"
+    "desc": "Worker/cache ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "security fixes and secret leaks",
@@ -275,7 +317,9 @@
         "git"
       ]
     ],
-    "desc": "Security ambiguity"
+    "desc": "Security ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "frontend rendering and login problems",
@@ -292,7 +336,9 @@
         "redirect"
       ]
     ],
-    "desc": "Frontend/auth ambiguity"
+    "desc": "Frontend/auth ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "database and orders query issues",
@@ -309,7 +355,9 @@
         "constraint"
       ]
     ],
-    "desc": "Database ambiguity"
+    "desc": "Database ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "mobile delivery and frontend formatting bugs",
@@ -326,7 +374,9 @@
         "formatter"
       ]
     ],
-    "desc": "Mobile/frontend ambiguity"
+    "desc": "Mobile/frontend ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "infra slowdown and pod memory problems",
@@ -343,7 +393,9 @@
         "512"
       ]
     ],
-    "desc": "Infra ambiguity"
+    "desc": "Infra ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "team planning and handoff process issues",
@@ -360,7 +412,9 @@
         "incident"
       ]
     ],
-    "desc": "Process ambiguity"
+    "desc": "Process ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "staging auth and production login failures",
@@ -377,7 +431,9 @@
         "callback"
       ]
     ],
-    "desc": "Auth ambiguity"
+    "desc": "Auth ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "pipeline timeout versus docker build bloat",
@@ -394,7 +450,9 @@
         "multi-stage"
       ]
     ],
-    "desc": "Build ambiguity"
+    "desc": "Build ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "secret rotation and exposed key incidents",
@@ -411,7 +469,9 @@
         "history"
       ]
     ],
-    "desc": "Secrets ambiguity"
+    "desc": "Secrets ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "api performance and cache stability issues",
@@ -428,7 +488,9 @@
         "responses"
       ]
     ],
-    "desc": "Performance ambiguity"
+    "desc": "Performance ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "runtime memory and retry queue issues",
@@ -445,7 +507,9 @@
         "memory"
       ]
     ],
-    "desc": "Memory ambiguity"
+    "desc": "Memory ambiguity",
+    "expected_goal": "answer",
+    "expected_status": "clarify"
   },
   {
     "query": "give me all recent operational updates across teams",
@@ -465,7 +529,9 @@
         "planning"
       ]
     ],
-    "desc": "Broad updates across database, CI, and planning"
+    "desc": "Broad updates across database, CI, and planning",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "summarize all infrastructure and devops updates",
@@ -487,7 +553,9 @@
         "512"
       ]
     ],
-    "desc": "Infra broad query"
+    "desc": "Infra broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "what happened across security topics lately",
@@ -508,7 +576,9 @@
         "pre-commit"
       ]
     ],
-    "desc": "Security broad query"
+    "desc": "Security broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "give me engineering updates across backend frontend and mobile",
@@ -530,7 +600,9 @@
         "apns"
       ]
     ],
-    "desc": "Cross-platform broad query"
+    "desc": "Cross-platform broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "summarize all auth and access related updates",
@@ -552,7 +624,9 @@
         "revoked"
       ]
     ],
-    "desc": "Auth/security broad query"
+    "desc": "Auth/security broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "what were the main reliability issues across the system",
@@ -574,7 +648,9 @@
         "memory"
       ]
     ],
-    "desc": "Reliability broad query"
+    "desc": "Reliability broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "give me all deployment and release related updates",
@@ -596,7 +672,9 @@
         "parallel"
       ]
     ],
-    "desc": "Release broad query"
+    "desc": "Release broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "summarize all team process and planning discussions",
@@ -618,7 +696,9 @@
         "week 3"
       ]
     ],
-    "desc": "Process broad query"
+    "desc": "Process broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "what changed across performance and scaling topics",
@@ -640,7 +720,9 @@
         "320"
       ]
     ],
-    "desc": "Performance broad query"
+    "desc": "Performance broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "summarize current platform incidents and fixes",
@@ -662,7 +744,9 @@
         "normal"
       ]
     ],
-    "desc": "Incident broad query"
+    "desc": "Incident broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "what are the important app reliability updates this week",
@@ -684,7 +768,9 @@
         "67"
       ]
     ],
-    "desc": "App reliability broad query"
+    "desc": "App reliability broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "show me all the major fixes across services",
@@ -706,7 +792,9 @@
         "uptime"
       ]
     ],
-    "desc": "Broad fixes query"
+    "desc": "Broad fixes query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "give me broad updates across auth data and infra",
@@ -728,7 +816,9 @@
         "stable"
       ]
     ],
-    "desc": "Auth/data/infra broad query"
+    "desc": "Auth/data/infra broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "summarize engineering changes across multiple threads",
@@ -750,7 +840,9 @@
         "checklist"
       ]
     ],
-    "desc": "Multi-thread broad query"
+    "desc": "Multi-thread broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "what discussions span several backend and ops topics",
@@ -772,7 +864,9 @@
         "dataframe"
       ]
     ],
-    "desc": "Backend/ops broad query"
+    "desc": "Backend/ops broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "give me a broad summary of active technical topics",
@@ -794,86 +888,120 @@
         "certificate"
       ]
     ],
-    "desc": "General technical broad query"
+    "desc": "General technical broad query",
+    "expected_goal": "summarize",
+    "expected_status": "ok"
   },
   {
     "query": "tell me details about a random movie release",
     "expected": "reject",
-    "desc": "No matching engineering thread"
+    "desc": "No matching engineering thread",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "who won the football match yesterday",
     "expected": "reject",
-    "desc": "Sports query should reject"
+    "desc": "Sports query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "best pizza place near downtown",
     "expected": "reject",
-    "desc": "Local restaurant query should reject"
+    "desc": "Local restaurant query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "weather forecast for mumbai this weekend",
     "expected": "reject",
-    "desc": "Weather query should reject"
+    "desc": "Weather query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "stock price prediction for tesla next month",
     "expected": "reject",
-    "desc": "Finance prediction query should reject"
+    "desc": "Finance prediction query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "explain the plot of interstellar",
     "expected": "reject",
-    "desc": "Movie plot query should reject"
+    "desc": "Movie plot query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "best exercises for lower back pain",
     "expected": "reject",
-    "desc": "Medical advice query should reject"
+    "desc": "Medical advice query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "how to bake a chocolate cake",
     "expected": "reject",
-    "desc": "Cooking query should reject"
+    "desc": "Cooking query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "translate this sentence to spanish",
     "expected": "reject",
-    "desc": "Translation query should reject"
+    "desc": "Translation query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "latest fashion trends for summer",
     "expected": "reject",
-    "desc": "Fashion query should reject"
+    "desc": "Fashion query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "famous tourist places in japan",
     "expected": "reject",
-    "desc": "Travel query should reject"
+    "desc": "Travel query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "tips for learning guitar fast",
     "expected": "reject",
-    "desc": "Music learning query should reject"
+    "desc": "Music learning query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "how many moons does saturn have",
     "expected": "reject",
-    "desc": "Astronomy query should reject"
+    "desc": "Astronomy query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "wedding decoration ideas on a budget",
     "expected": "reject",
-    "desc": "Event planning query should reject"
+    "desc": "Event planning query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "how to train for a marathon",
     "expected": "reject",
-    "desc": "Fitness query should reject"
+    "desc": "Fitness query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   },
   {
     "query": "best novels to read this year",
     "expected": "reject",
-    "desc": "Books query should reject"
+    "desc": "Books query should reject",
+    "expected_goal": "reject",
+    "expected_status": "reject"
   }
 ]

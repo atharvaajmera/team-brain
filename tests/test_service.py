@@ -122,8 +122,27 @@ def test_evidence_weak_distance():
     ]
     result = evaluate_evidence(plan, threads, "redis outage")
     
-    assert result.strong_enough is False
-    assert result.reason in ("weak_distance", "low_overlap")
+    assert result.reason == "weak_distance"
+
+def test_evidence_moderate_distance_with_threads_answers():
+    """Thread with moderate distance (e.g. 0.70) but good overlap and multiple threads answers successfully."""
+    plan = QueryPlan(goal="answer")
+    threads = [
+        _make_thread("t1", min_distance=0.70, messages=[
+            {"id": "m1", "document": "some relevant discussion about redis outage pool",
+             "metadata": {"ts": str(time.time() - 100), "author": "alice"}},
+        ]),
+        _make_thread("t2", min_distance=0.75, messages=[
+            {"id": "m2", "document": "more relevant discussion",
+             "metadata": {"ts": str(time.time() - 200), "author": "bob"}},
+        ]),
+    ]
+    result = evaluate_evidence(plan, threads, "redis outage")
+    
+    # Distance=0.70 is < 1.05, so it shouldn't hit weak_distance hard block.
+    # Overlap and thread count should push confidence >= 0.25
+    assert result.strong_enough is True
+    assert result.confidence >= 0.25
 
 
 def test_evidence_summarize_needs_multiple_threads():
@@ -238,3 +257,35 @@ def test_evidence_gap_boosts_confidence():
     
     # Dominant gap should produce higher confidence
     assert result_dominant.confidence > result_flat.confidence
+
+def test_evidence_moderate_distance_still_answers():
+    """Thread with moderate distance (< 0.9) but low overlap still answers (uncertain band)."""
+    plan = QueryPlan(goal="answer")
+    threads = [
+        _make_thread("t1", min_distance=0.8, messages=[
+            {"id": "m1", "document": "brief mention of topic without much overlap",
+             "metadata": {"ts": str(time.time() - 100), "author": "alice"}},
+        ]),
+    ]
+    # "redis outage" has no overlap with the doc
+    result = evaluate_evidence(plan, threads, "redis outage")
+    
+    assert result.strong_enough is True
+    assert result.reason == "moderate_match"
+    assert result.confidence < 0.5
+
+def test_evidence_strong_distance_ignores_overlap():
+    """Thread with very low distance always answers, even with no overlap."""
+    plan = QueryPlan(goal="answer")
+    threads = [
+        _make_thread("t1", min_distance=0.1, messages=[
+            {"id": "m1", "document": "short exact match concept",
+             "metadata": {"ts": str(time.time() - 100), "author": "alice"}},
+        ]),
+    ]
+    result = evaluate_evidence(plan, threads, "redis outage")
+    
+    assert result.strong_enough is True
+    assert result.confidence > 0.4
+    # With 0 overlap but very strong distance, it should still be good_distance or high_relevance
+    assert result.reason in ("good_distance", "high_relevance", "moderate_match")
