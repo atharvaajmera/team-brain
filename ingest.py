@@ -1,37 +1,45 @@
+import json
+import logging
 import os
 import ssl
-import certifi
-import json
 import time
-import logging
+
+import certifi
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+
 from memory.settings import settings
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 logger = logging.getLogger("ingest")
 
-SLACK_BOT_TOKEN = settings.SLACK_BOT_TOKEN
+SLACK_SYNC_TOKEN = settings.SLACK_SYNC_TOKEN
 
 ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-client= WebClient(token=SLACK_BOT_TOKEN,ssl=ssl_context)
+client = WebClient(token=SLACK_SYNC_TOKEN, ssl=ssl_context)
 
 
 def _is_system_message(text):
     text = (text or "").lower()
-    return any(phrase in text for phrase in [
-        "joined the channel",
-        "left the channel",
-        "has joined",
-        "has left",
-        "added to the channel",
-        "removed from the channel",
-    ])
+    return any(
+        phrase in text
+        for phrase in [
+            "joined the channel",
+            "left the channel",
+            "has joined",
+            "has left",
+            "added to the channel",
+            "removed from the channel",
+        ]
+    )
+
 
 def get_user_map():
     """Fetch all Slack users and return a dict of {id: real_name or name}.
-    
+
     Requires the `users:read` scope on the bot token.
     Returns an empty dict if the scope is missing (graceful degradation).
     """
@@ -42,24 +50,32 @@ def get_user_map():
             kwargs = {"limit": 200}
             if cursor:
                 kwargs["cursor"] = cursor
-            
+
             response = client.users_list(**kwargs)
             for user in response.get("members", []):
                 uid = user.get("id")
                 # Prefer real_name, fallback to display_name, then name
                 profile = user.get("profile", {})
-                name = profile.get("real_name") or profile.get("display_name") or user.get("name")
+                name = (
+                    profile.get("real_name")
+                    or profile.get("display_name")
+                    or user.get("name")
+                )
                 if uid and name:
                     norm_name = name.lower().replace(" ", "_")
                     user_map[uid] = {"norm": norm_name, "display": name}
-                    
+
             cursor = response.get("response_metadata", {}).get("next_cursor")
             if not cursor:
                 break
     except SlackApiError as e:
         if "missing_scope" in str(e):
-            logger.warning("[user_map] Bot token missing 'users:read' scope. Author names will use raw Slack IDs.")
-            logger.warning("           Add 'users:read' to your Slack app's Bot Token Scopes to enable name resolution.")
+            logger.warning(
+                "[user_map] Bot token missing 'users:read' scope. Author names will use raw Slack IDs."
+            )
+            logger.warning(
+                "           Add 'users:read' to your Slack app's Bot Token Scopes to enable name resolution."
+            )
         else:
             logger.error(f"[user_map] Error fetching users: {e}")
     except Exception as e:
@@ -68,56 +84,79 @@ def get_user_map():
 
 
 def get_public_channels():
-    """Fetch all public channels the bot can see.
-    
-    Requires the `channels:read` scope on the bot token.
-    Returns an empty list if the scope is missing (graceful degradation).
+    """Fetch all channels the sync token can access.
+
+    Prefers both public and private channels when the token/scopes allow it,
+    and falls back to public channels only on missing-scope errors.
     """
-    channels = []
-    cursor = None
-    try:
-        while True:
-            kwargs = {"types": "public_channel", "limit": 200, "exclude_archived": True}
-            if cursor:
-                kwargs["cursor"] = cursor
-            
-            response = client.conversations_list(**kwargs)
-            for ch in response.get("channels", []):
-                if ch.get("id"):
-                    channels.append({"id": ch["id"], "name": ch.get("name", ch["id"])})
-                    
-            cursor = response.get("response_metadata", {}).get("next_cursor")
-            if not cursor:
-                break
-    except SlackApiError as e:
-        if "missing_scope" in str(e):
-            logger.warning("[channels] Bot token missing 'channels:read' scope. Will fall back to SLACK_CHANNEL_ID_AUTO.")
-            logger.warning("           Add 'channels:read' to your Slack app's Bot Token Scopes for multi-channel ingestion.")
-        else:
-            logger.error(f"[channels] Error fetching channels: {e}")
-    except Exception as e:
-        logger.error(f"[channels] Unexpected error: {e}")
-    return channels
+    channel_types_to_try = ["public_channel,private_channel", "public_channel"]
+
+    for channel_types in channel_types_to_try:
+        channels = []
+        cursor = None
+        try:
+            while True:
+                kwargs = {
+                    "types": channel_types,
+                    "limit": 200,
+                    "exclude_archived": True,
+                }
+                if cursor:
+                    kwargs["cursor"] = cursor
+
+                response = client.conversations_list(**kwargs)
+                for ch in response.get("channels", []):
+                    if ch.get("id"):
+                        channels.append(
+                            {"id": ch["id"], "name": ch.get("name", ch["id"])}
+                        )
+
+                cursor = response.get("response_metadata", {}).get("next_cursor")
+                if not cursor:
+                    break
+            return channels
+        except SlackApiError as e:
+            if "missing_scope" in str(e) and channel_types != "public_channel":
+                logger.warning(
+                    "[channels] Sync token missing private-channel scope; retrying with public channels only."
+                )
+                continue
+            if "missing_scope" in str(e):
+                logger.warning(
+                    "[channels] Sync token missing channel discovery scope. Will fall back to SLACK_CHANNEL_ID_AUTO."
+                )
+                logger.warning(
+                    "           Add Slack history/read scopes to your sync token for multi-channel ingestion."
+                )
+            else:
+                logger.error(f"[channels] Error fetching channels: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"[channels] Unexpected error: {e}")
+            return []
+
+    return []
+
 
 def _get_author(msg, user_map=None):
     """Return the human-readable author tuple: (normalized_name, display_name, user_id)."""
-    user_id = msg.get('user', '')
-    
+    user_id = msg.get("user", "")
+
     try:
         # Check generator metadata first
-        gen_name = msg['metadata']['event_payload']['author']
+        gen_name = msg["metadata"]["event_payload"]["author"]
         norm_name = gen_name.lower().replace(" ", "_")
         return (norm_name, gen_name, user_id)
     except (KeyError, TypeError):
         pass
-    
+
     if not user_id:
-        return ('unknown', 'Unknown', '')
-    
+        return ("unknown", "Unknown", "")
+
     if user_map and user_id in user_map:
         info = user_map[user_id]
         return (info["norm"], info["display"], user_id)
-        
+
     return (user_id, user_id, user_id)
 
 
@@ -150,14 +189,17 @@ def get_threads_from_channel(channel_id, user_map=None, limit=None, after_ts=Non
                 response = client.conversations_history(**kwargs)
             except SlackApiError as e:
                 if e.response.status_code == 429:
-                    delay = int(e.response.headers.get('Retry-After', 10))
-                    logger.warning(f"Rate limited on history. Sleeping for {delay} seconds...")
+                    delay = int(e.response.headers.get("Retry-After", 10))
+                    logger.warning(
+                        f"Rate limited on history. Sleeping for {delay} seconds..."
+                    )
                     time.sleep(delay)
                     continue
                 else:
                     raise e
             messages = [
-                msg for msg in response.get("messages", [])
+                msg
+                for msg in response.get("messages", [])
                 if not _is_system_message(msg.get("text", ""))
             ]
 
@@ -175,31 +217,40 @@ def get_threads_from_channel(channel_id, user_map=None, limit=None, after_ts=Non
                                 "channel": channel_id,
                                 "ts": thread_ts,
                                 "include_all_metadata": True,
-                                "limit": 200
+                                "limit": 200,
                             }
                             if reply_cursor:
                                 reply_kwargs["cursor"] = reply_cursor
-                            
-                            replies_response = client.conversations_replies(**reply_kwargs)
+
+                            replies_response = client.conversations_replies(
+                                **reply_kwargs
+                            )
                             msgs_in_reply = replies_response.get("messages", [])
                             if not reply_cursor:
-                                msgs_in_reply = msgs_in_reply[1:] # Skip first as it's the root msg
-                            
+                                msgs_in_reply = msgs_in_reply[
+                                    1:
+                                ]  # Skip first as it's the root msg
+
                             replies = [
-                                r for r in msgs_in_reply
+                                r
+                                for r in msgs_in_reply
                                 if not _is_system_message(r.get("text", ""))
                             ]
                             for reply in replies:
                                 reply["author"] = _get_author(reply, user_map)
                                 message_array.append(reply)
-                                
-                            reply_cursor = replies_response.get("response_metadata", {}).get("next_cursor")
+
+                            reply_cursor = replies_response.get(
+                                "response_metadata", {}
+                            ).get("next_cursor")
                             if not reply_cursor:
                                 break
                         except SlackApiError as e:
                             if e.response.status_code == 429:
-                                delay = int(e.response.headers.get('Retry-After', 10))
-                                logger.warning(f"Rate limited on replies. Sleeping for {delay} seconds...")
+                                delay = int(e.response.headers.get("Retry-After", 10))
+                                logger.warning(
+                                    f"Rate limited on replies. Sleeping for {delay} seconds..."
+                                )
                                 time.sleep(delay)
                             else:
                                 logger.error(f"Error fetching replies: {e}")
