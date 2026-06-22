@@ -1,9 +1,12 @@
-import requests
 import json
+
+import requests
+
 from memory.settings import settings
 
 OLLAMA_URL = settings.OLLAMA_URL
 MODEL = settings.MODEL
+
 
 def is_ollama_available(timeout=2):
     """Quick health check: can we reach Ollama?"""
@@ -15,31 +18,31 @@ def is_ollama_available(timeout=2):
         return False
 
 
-def build_context(threads):
+def build_context(threads, include_permalinks=True):
     if not threads:
         return "(no relevant threads found)"
 
-    from memory.citations import ts_to_readable, make_permalink
+    from memory.citations import make_permalink, ts_to_readable
 
     parts = []
     for i, thread in enumerate(threads, 1):
-        msgs = thread.get('messages', [])
+        msgs = thread.get("messages", [])
         lines = []
         for msg in msgs:
-            meta = msg.get('metadata', {})
-            user = meta.get('author', meta.get('user', 'unknown'))
-            ts = meta.get('ts', '')
-            text = msg.get('document', '')
+            meta = msg.get("metadata", {})
+            user = meta.get("author", meta.get("user", "unknown"))
+            ts = meta.get("ts", "")
+            text = msg.get("document", "")
             readable_ts = ts_to_readable(ts)
-            channel_id = meta.get('channel_id', '')
-            permalink = make_permalink(channel_id, ts)
-            
+            channel_id = meta.get("channel_id", "")
+            permalink = make_permalink(channel_id, ts) if include_permalinks else ""
+
             if permalink:
                 lines.append(f"  @{user} [{readable_ts}] ({permalink}): {text}")
             else:
                 lines.append(f"  @{user} [{readable_ts}]: {text}")
-        
-        thread_id = thread.get('thread_id', '?')
+
+        thread_id = thread.get("thread_id", "?")
         readable_thread_ts = ts_to_readable(thread_id)
         parts.append(f"Thread {i} (started {readable_thread_ts}):\n" + "\n".join(lines))
 
@@ -51,11 +54,15 @@ def _build_prompt(query, category, context, answer_reqs=None):
     answer_reqs = answer_reqs or {}
     format_str = answer_reqs.get("format", "direct")
     cite = answer_reqs.get("cite_sources", True)
-    
+
     cite_rule = (
-        "- When citing, reference the author and timestamp: e.g. '@alice (2026-05-03 14:30)'.\n"
-        "- If a Slack permalink is available in the thread data, include it."
-    ) if cite else "- No need for explicit citations."
+        (
+            "- When citing, reference the author and timestamp: e.g. '@alice (2026-05-03 14:30)'.\n"
+            "- If a Slack permalink is available in the thread data, include it."
+        )
+        if cite
+        else "- No need for explicit citations."
+    )
     format_rule = f"- Format your response as a {format_str}."
 
     return (

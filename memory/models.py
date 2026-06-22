@@ -24,6 +24,8 @@ class AnswerRequirements(BaseModel):
 
 class QueryPlan(BaseModel):
     goal: Literal["answer", "catch_up", "summarize", "analysis", "clarify", "reject"]
+    focus: Literal["topic", "person", "decision", "timeline"] | None = None
+    time_scope: str | None = None
     retrieval_steps: list[RetrievalStep] = Field(default_factory=list)
     answer_requirements: AnswerRequirements = Field(default_factory=AnswerRequirements)
 
@@ -52,7 +54,8 @@ EvidenceReason = Literal[
     "high_relevance", 
     "good_distance", 
     "good_overlap", 
-    "moderate_match"
+    "moderate_match",
+    "uncertain"
 ]
 
 class EvidenceDiagnostic(BaseModel):

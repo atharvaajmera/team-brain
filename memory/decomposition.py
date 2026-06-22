@@ -22,15 +22,14 @@ You are a query decomposition engine for a Slack archive search bot.
 
 The user asked a broad question that likely spans multiple topics.
 Break it into 2-5 focused sub-queries that together cover the full scope
-of the original question.  Each sub-query should be a short, specific
+of the original question. Each sub-query should be a short, specific
 search string suitable for semantic vector search over Slack messages.
 
 Output ONLY valid JSON, no markdown fences, no explanation.
 
 Schema:
 {{
-    "sub_queries": ["query1", "query2", ...],
-    "reasoning": "one-line explanation of how you split the query"
+    "sub_queries": ["query1", "query2"]
 }}
 
 Rules:
@@ -43,13 +42,13 @@ Rules:
 Examples:
 
 User: "Give me an overview of all the issues this week"
-Output: {{"sub_queries": ["deployment failures and rollbacks", "database migration issues", "frontend bugs and errors", "infrastructure and scaling problems", "security vulnerabilities and patches"], "reasoning": "Split by common engineering issue categories"}}
+Output: {{"sub_queries": ["deployment failures", "database errors", "frontend bugs"]}}
 
 User: "What happened with the backend?"
-Output: {{"sub_queries": ["backend API errors and timeouts", "backend deployment and scaling", "backend database issues"], "reasoning": "Split backend concerns into API, deployment, and database"}}
+Output: {{"sub_queries": ["backend API timeouts", "backend database issues"]}}
 
 User: "Summarize everything"
-Output: {{"sub_queries": ["deployment and release issues", "bug fixes and error reports", "infrastructure and performance", "security and dependency updates"], "reasoning": "Broad catch-all split into four major engineering areas"}}
+Output: {{"sub_queries": ["deployment issues", "bug fixes", "performance", "security updates"]}}
 """
 
 
@@ -59,15 +58,15 @@ def decompose_query(user_query: str) -> dict:
     Returns:
         dict with keys:
             - sub_queries: list[str] of focused search strings
-            - reasoning: str explaining the decomposition
+            - reasoning: str explaining the decomposition (optional)
             - decomposed: bool indicating whether decomposition was applied
     """
     try:
         response = _client.chat.completions.create(
-            messages=[{
-                "role": "user",
-                "content": _DECOMPOSE_PROMPT + f"\n\nUser query: {user_query}",
-            }],
+            messages=[
+                {"role": "system", "content": _DECOMPOSE_PROMPT},
+                {"role": "user", "content": f"User query: {user_query}"}
+            ],
             model=_MODEL,
             temperature=0.0,
             max_tokens=256,

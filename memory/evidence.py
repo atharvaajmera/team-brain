@@ -26,7 +26,7 @@ logger = logging.getLogger("evidence")
 # ChromaDB cosine distance: 0 = identical, 2 = opposite
 # Typical good match: 0.3–0.6, weak match: 0.8+, unrelated: 1.2+
 DISTANCE_STRONG = 0.55       # best distance below this = strong signal
-DISTANCE_WEAK = 0.90         # best distance above this = weak signal
+DISTANCE_WEAK = 1.05         # best distance above this = weak signal
 GAP_DOMINANT = 0.15          # gap > this means top thread is clearly dominant
 OVERLAP_STRONG = 0.40        # query-token overlap > this = strong signal
 OVERLAP_WEAK = 0.15          # query-token overlap < this = weak signal
@@ -214,8 +214,8 @@ def evaluate_evidence(plan: QueryPlan, threads: list, query: str) -> EvidenceRes
         ratio = (DISTANCE_WEAK - best_distance) / (DISTANCE_WEAK - DISTANCE_STRONG)
         distance_score = 0.05 + ratio * 0.35
     
-    # Overlap component (0-0.3): higher overlap = higher confidence
-    overlap_score = min(overlap, 1.0) * 0.3
+    # Overlap component (0-0.35): higher overlap = higher confidence
+    overlap_score = min(overlap, 1.0) * 0.35
     
     # Gap component (0-0.15): larger gap = more confidence in top result
     gap_score = min(gap / 0.3, 1.0) * 0.15 if gap > 0 else 0.0
@@ -228,20 +228,20 @@ def evaluate_evidence(plan: QueryPlan, threads: list, query: str) -> EvidenceRes
     
     # ── Final gate ──
     # Require at least moderate confidence to answer
-    if best_distance >= DISTANCE_WEAK and overlap < OVERLAP_WEAK:
-        return EvidenceResult(
-            confidence=confidence,
-            strong_enough=False,
-            reason="low_overlap",
-            clarification_question=_build_clarification("low_overlap", query)
-        )
-    
     if best_distance >= DISTANCE_WEAK:
         return EvidenceResult(
             confidence=confidence,
             strong_enough=False,
             reason="weak_distance",
             clarification_question=_build_clarification("weak_distance", query)
+        )
+        
+    if confidence < 0.25:
+        return EvidenceResult(
+            confidence=confidence,
+            strong_enough=False,
+            reason="uncertain",
+            clarification_question=_build_clarification("uncertain", query)
         )
     
     # Determine reason string for logging
@@ -251,6 +251,8 @@ def evaluate_evidence(plan: QueryPlan, threads: list, query: str) -> EvidenceRes
         reason = "good_distance"
     elif overlap >= OVERLAP_STRONG:
         reason = "good_overlap"
+    elif confidence < 0.5:
+        reason = "moderate_match"
     else:
         reason = "moderate_match"
     

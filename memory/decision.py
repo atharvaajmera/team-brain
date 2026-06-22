@@ -1,9 +1,40 @@
 """Main routing logic for user queries."""
 
 from time import perf_counter
+
 from memory.models import QueryPlan
-from memory.retrieval import execute_semantic_search, execute_recent_threads
+from memory.retrieval import execute_recent_threads, execute_semantic_search
 from memory.shared import group_threads
+
+
+def _rank_recent_threads(candidates):
+    """Group recent candidates by thread_id and rank by newest timestamp."""
+    threads = {}
+    for c in candidates:
+        tid = c["metadata"]["thread_id"]
+        threads.setdefault(tid, {"candidates": [], "ts_list": []})
+        threads[tid]["candidates"].append(c)
+        ts = float(c["metadata"].get("ts", 0))
+        threads[tid]["ts_list"].append(ts)
+
+    aggregates = []
+    for tid, td in threads.items():
+        newest_ts = max(td["ts_list"])
+        aggregates.append(
+            {
+                "thread_id": tid,
+                "avg_distance": 0.0,
+                "min_distance": 0.0,
+                "message_count": len(td["candidates"]),
+                "thread_score": -newest_ts,  # negative so that smaller (more negative) is better in ascending sort
+                "best_candidate": max(
+                    td["candidates"], key=lambda x: float(x["metadata"].get("ts", 0))
+                ),
+            }
+        )
+
+    # Sort ascending (most negative = newest = first)
+    return sorted(aggregates, key=lambda x: x["thread_score"])
 
 
 def _fetch_full_threads(thread_specs):
@@ -17,8 +48,10 @@ def _fetch_full_threads(thread_specs):
     for thread_id, channel_id in thread_specs:
         where_clause = {"thread_id": thread_id}
         if channel_id:
-            where_clause = {"$and": [{"thread_id": thread_id}, {"channel_id": channel_id}]}
-            
+            where_clause = {
+                "$and": [{"thread_id": thread_id}, {"channel_id": channel_id}]
+            }
+
         results = collection.get(where=where_clause)
         if not results["documents"]:
             continue
@@ -27,23 +60,70 @@ def _fetch_full_threads(thread_specs):
         for doc, meta, doc_id in zip(
             results["documents"], results["metadatas"], results["ids"]
         ):
-            thread_msgs.append({
-                "id": doc_id,
-                "document": doc,
-                "metadata": meta,
-            })
+            thread_msgs.append(
+                {
+                    "id": doc_id,
+                    "document": doc,
+                    "metadata": meta,
+                }
+            )
         thread_msgs.sort(key=lambda x: float(x["metadata"]["ts"]))
-        threads.append({
-            "thread_id": thread_id,
-            "messages": thread_msgs,
-        })
+        threads.append(
+            {
+                "thread_id": thread_id,
+                "messages": thread_msgs,
+            }
+        )
     return threads
 
 
-def _handle_search(query: str, plan: QueryPlan, timings: dict, allowed_channel_ids: list[str] | None = None):
+from datetime import datetime, timedelta
+
+
+def _broaden_catch_up_filters(original_after_str: str | None) -> list[str | None]:
+    """Return a sequence of progressively broader 'after' dates."""
+    if not original_after_str:
+        return [None]
+
+    try:
+        dt = datetime.strptime(original_after_str, "%Y-%m-%d")
+    except ValueError:
+        return [original_after_str, None]
+
+    today = datetime.now()
+    days_diff = (today - dt).days
+
+    # If the original query is already older than a week, just fallback to None
+    if days_diff > 7:
+        return [original_after_str, None]
+
+    three_days_ago = (today - timedelta(days=3)).strftime("%Y-%m-%d")
+    seven_days_ago = (today - timedelta(days=7)).strftime("%Y-%m-%d")
+
+    windows = [original_after_str]
+    if three_days_ago != original_after_str:
+        windows.append(three_days_ago)
+    if seven_days_ago != original_after_str and seven_days_ago != three_days_ago:
+        windows.append(seven_days_ago)
+    windows.append(None)
+
+    return windows
+
+
+def _handle_search(
+    query: str,
+    plan: QueryPlan,
+    timings: dict,
+    allowed_channel_ids: list[str] | None = None,
+):
     """Standard semantic search path."""
     t = perf_counter()
     all_candidates = []
+
+    is_catch_up = plan.goal == "catch_up"
+
+    # Track if we broadened the search
+    broadened = False
 
     for step in plan.retrieval_steps:
         tool = step.tool
@@ -51,24 +131,56 @@ def _handle_search(query: str, plan: QueryPlan, timings: dict, allowed_channel_i
         filters = step.filters.model_dump(exclude_none=True)
         limit = step.limit
 
-        if tool in ("semantic_search", "author_search"):
-            candidates = execute_semantic_search(
-                step_query or query, filters, limit=limit, allowed_channel_ids=allowed_channel_ids
-            )
-            all_candidates.extend(candidates)
-        elif tool == "recent_threads":
-            candidates = execute_recent_threads(filters, limit=limit, allowed_channel_ids=allowed_channel_ids)
-            all_candidates.extend(candidates)
+        after_windows = (
+            _broaden_catch_up_filters(filters.get("after"))
+            if is_catch_up
+            else [filters.get("after")]
+        )
+
+        for i, after_val in enumerate(after_windows):
+            current_filters = dict(filters)
+            if after_val is not None:
+                current_filters["after"] = after_val
+            elif "after" in current_filters:
+                del current_filters["after"]
+
+            if tool in ("semantic_search", "author_search"):
+                candidates = execute_semantic_search(
+                    step_query or query,
+                    current_filters,
+                    limit=limit,
+                    allowed_channel_ids=allowed_channel_ids,
+                )
+            elif tool == "recent_threads":
+                candidates = execute_recent_threads(
+                    current_filters,
+                    limit=limit,
+                    allowed_channel_ids=allowed_channel_ids,
+                )
+            else:
+                candidates = []
+
+            if candidates:
+                all_candidates.extend(candidates)
+                if i > 0:
+                    broadened = True
+                break  # Stop broadening if we found results
 
     timings["retrieve"] = perf_counter() - t
-    return all_candidates
+    return all_candidates, broadened
 
 
-def _handle_summarize(query: str, plan: QueryPlan, timings: dict, allowed_channel_ids: list[str] | None = None):
+def _handle_summarize(
+    query: str,
+    plan: QueryPlan,
+    timings: dict,
+    allowed_channel_ids: list[str] | None = None,
+    allow_query_decomposition: bool = True,
+):
     """Decompose a broad query into sub-queries for wider topic coverage."""
     fmt = plan.answer_requirements.format
-    if fmt in ("timeline", "comparison"):
-        # Don't decompose for timeline (needs pure chronology) or comparison (planner provides steps)
+    if (not allow_query_decomposition) or fmt in ("timeline", "comparison"):
+        # Skip decomposition when cloud planning is disabled, or when chronology/comparison matters more.
         return _handle_search(query, plan, timings, allowed_channel_ids)
 
     from memory.decomposition import decompose_query
@@ -89,14 +201,22 @@ def _handle_summarize(query: str, plan: QueryPlan, timings: dict, allowed_channe
     all_candidates = []
 
     for sub_query in decomp["sub_queries"]:
-        candidates = execute_semantic_search(sub_query, filters, limit=limit, allowed_channel_ids=allowed_channel_ids)
+        candidates = execute_semantic_search(
+            sub_query, filters, limit=limit, allowed_channel_ids=allowed_channel_ids
+        )
         all_candidates.extend(candidates)
 
     timings["retrieve"] = perf_counter() - t
-    return all_candidates
+    return all_candidates, False
 
 
-def execute_plan(plan: QueryPlan, query: str, timings: dict, allowed_channel_ids: list[str] | None = None):
+def execute_plan(
+    plan: QueryPlan,
+    query: str,
+    timings: dict,
+    allowed_channel_ids: list[str] | None = None,
+    allow_query_decomposition: bool = True,
+):
     """Execute the retrieval steps from a QueryPlan and return full threads."""
     goal = plan.goal
 
@@ -104,10 +224,21 @@ def execute_plan(plan: QueryPlan, query: str, timings: dict, allowed_channel_ids
         return []
 
     # --- Route by goal ---
+    broadened = False
     if goal == "summarize":
-        all_candidates = _handle_summarize(query, plan, timings, allowed_channel_ids)
+        all_candidates, broadened = _handle_summarize(
+            query,
+            plan,
+            timings,
+            allowed_channel_ids,
+            allow_query_decomposition=allow_query_decomposition,
+        )
     else:
-        all_candidates = _handle_search(query, plan, timings, allowed_channel_ids)
+        all_candidates, broadened = _handle_search(
+            query, plan, timings, allowed_channel_ids
+        )
+
+    timings["_broadened"] = broadened
 
     # --- Deduplicate ---
     t = perf_counter()
@@ -118,24 +249,42 @@ def execute_plan(plan: QueryPlan, query: str, timings: dict, allowed_channel_ids
             seen.add(c["id"])
             unique_candidates.append(c)
 
-    sorted_threads = group_threads(unique_candidates)
-    
+    is_recent = goal == "catch_up" or any(
+        step.tool == "recent_threads" for step in plan.retrieval_steps
+    )
+
+    if is_recent:
+        sorted_threads = _rank_recent_threads(unique_candidates)
+    else:
+        sorted_threads = group_threads(unique_candidates)
+
     # --- Format specific logic ---
     fmt = plan.answer_requirements.format
     if fmt == "decision":
-        decision_markers = ["decided", "decision", "agreed", "going with", "approved", "resolution"]
+        decision_markers = [
+            "decided",
+            "decision",
+            "agreed",
+            "going with",
+            "approved",
+            "resolution",
+        ]
         for th in sorted_threads:
             doc = (th.get("best_candidate", {}).get("document") or "").lower()
             if any(m in doc for m in decision_markers):
-                th["thread_score"] += 0.2
+                th["thread_score"] -= 0.2
         # Re-sort after boosting
-        sorted_threads.sort(key=lambda x: x["thread_score"], reverse=True)
+        sorted_threads.sort(key=lambda x: x["thread_score"])
 
     top_5 = sorted_threads[:5]
-    
+
     if fmt == "timeline":
-        top_5.sort(key=lambda th: float(th.get("best_candidate", {}).get("metadata", {}).get("ts", 0)))
-    
+        top_5.sort(
+            key=lambda th: float(
+                th.get("best_candidate", {}).get("metadata", {}).get("ts", 0)
+            )
+        )
+
     top_thread_specs = []
     for th in top_5:
         cid = th.get("best_candidate", {}).get("metadata", {}).get("channel_id")
@@ -164,4 +313,3 @@ def execute_plan(plan: QueryPlan, query: str, timings: dict, allowed_channel_ids
         thread["_retrieval_score"] = retrieval_scores.get(tid, {})
 
     return threads
-
