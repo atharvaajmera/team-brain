@@ -1,181 +1,120 @@
-# TeamBrain - Slack RAG Bot
+# TeamBrain
 
-A Retrieval-Augmented Generation (RAG) bot that ingests Slack messages and enables semantic search over your team's conversation history using ChromaDB and sentence transformers.
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.8+-yellow?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.8+">
+  <img src="https://img.shields.io/badge/ChromaDB-0.5.5-blue?style=for-the-badge" alt="ChromaDB">
+  <img src="https://img.shields.io/badge/Groq-Llama%204%20Scout-orange?style=for-the-badge" alt="Groq API">
+  <img src="https://img.shields.io/badge/Local-Ollama-purple?style=for-the-badge" alt="Ollama">
+  <img src="https://img.shields.io/badge/Tests-40/40_Passing-brightgreen?style=for-the-badge" alt="Tests 40/40">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License MIT">
+</p>
 
-## 🚀 Features Implemented
+A privacy-aware Retrieval-Augmented Generation (RAG) system that ingests your team's Slack conversations and lets you search, summarize, and ask questions about them using natural language. TeamBrain connects directly to your Slack workspace, processes engineering discussions, and answers complex queries without leaking private data to the cloud.
 
-### 1. **Slack Integration** ([ingest.py](ingest.py))
+---
 
-- Connects to Slack workspace using Slack SDK
-- Fetches conversation history from specified channels
-- Retrieves threaded replies and nested conversations
-- SSL-secured connection with certificate verification
-- Configurable message limit for data ingestion
+## Features
 
-### 2. **Vector Database Storage** ([memory.py](memory.py))
+- **LLM-Powered Query Understanding:** Natural language queries are mapped to strict JSON execution plans via Groq.
+- **Intelligent Evidence Gating:** An AI-powered reasoning engine breaks down broad queries, evaluates retrieval evidence, and clarifies ambiguity before attempting to answer. Calculates composite confidence scores (cosine distance, lexical overlap, thread density). If confidence is low, the bot clarifies rather than hallucinates.
+- **Privacy-Aware Routing:** Automatic PII detection safely diverts sensitive queries to local offline models (Ollama).
+- **Advanced Retrieval:** MMR diversification, Pseudo-Relevance Feedback (PRF), and thread-level message-count weighting.
+- **Incremental Syncing:** Cursor-based pagination that remembers its last sync state. Only new Slack messages are fetched.
+- **Offline Diagnostics:** Run fully deterministic eval benchmarks without burning LLM API credits.
 
-- Uses ChromaDB for persistent vector storage
-- Stores messages with metadata (user, timestamp, thread_id)
-- Semantic search using sentence transformers
-- Efficient upsert operations for message updates
-- Query functionality with configurable result limits (default: top 5)
+## Tech Stack
 
-### 3. **Knowledge Base Builder** ([brain.py](brain.py))
+| Component | Technology |
+|-----------|------------|
+| **Vector DB** | ChromaDB 0.5.5 |
+| **Embeddings** | Sentence Transformers (`all-MiniLM-L6-v2`) |
+| **Cloud LLM** | Groq API (Llama 4 Scout 17B) |
+| **Local LLM** | Ollama (llama3.2) |
+| **Slack** | Slack SDK (Bolt) |
+| **Testing** | Pytest |
 
-- Automated pipeline to ingest and store Slack messages
-- Processes messages from specified channels
-- Extracts and structures message metadata
-- Batch processing for efficient storage
-- Converts raw Slack data into searchable embeddings
+## Installation
 
-### 4. **Interactive Query Interface** ([ask.py](ask.py))
-
-- Command-line interface for querying the knowledge base
-- Semantic search with confidence scoring
-- Configurable relevance threshold (default: 1.2)
-- Displays user, timestamp, and message content
-- Filters low-confidence results
-- Exit commands: `exit`, `quit`, `close`
-
-## 🛠️ Tech Stack
-
-- **Slack SDK**: Slack workspace integration
-- **ChromaDB (v0.5.5)**: Vector database for semantic search
-- **Sentence Transformers**: Text embedding generation
-- **Python dotenv**: Environment variable management
-- **Certifi**: SSL certificate verification
-
-## 📋 Prerequisites
-
-- Python 3.8+
-- Slack Bot Token with appropriate permissions
-- Access to a Slack workspace
-
-## ⚙️ Setup
-
-1. **Clone the repository**
-
-   ```bash
-   git clone <repo-url>
-   cd team-brain-python
-   ```
-
-2. **Create virtual environment**
-
-   ```bash
-   python -m venv venv
-   .\venv\Scripts\activate  # Windows
-   source venv/bin/activate  # Linux/Mac
-   ```
-
-3. **Install dependencies**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure environment variables**
-
-   Create a `.env` file in the root directory:
-
-   ```
-   SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
-   SLACK_CHANNEL_ID=C0A766EQALV
-   ```
-
-## 🎯 Usage
-
-### Building the Knowledge Base
-
-Ingest messages from your Slack channel:
-
+**1. Clone and create virtual environment**
 ```bash
-python brain.py
+git clone https://github.com/yourusername/team-brain-python.git
+cd team-brain-python
+python -m venv venv
+
+# Windows
+.\venv\Scripts\activate
+# Linux/Mac
+source venv/bin/activate
 ```
 
-This will:
+**2. Install dependencies**
+```bash
+pip install -r requirements.txt
+```
 
-- Connect to the specified Slack channel
-- Fetch the last 50 messages (configurable)
-- Store them in the ChromaDB vector database
+**3. Configure environment variables**
+Create a `.env` file in the root directory:
+```env
+SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+SLACK_CHANNEL_ID_AUTO=C0A766EQALV
+GROQ_API_KEY=gsk_your-groq-api-key
+```
 
-### Querying the Knowledge Base
+**4. Build the knowledge base**
+```bash
+# Incremental sync (first run = full index)
+python brain.py
 
-Start the interactive query interface:
+# Force full re-index
+python brain.py --full
+```
 
+## Usage
+
+### Slack Bot (Live Mode)
+Run the Slack application to listen for app mentions:
+```bash
+python slack_bot.py
+```
+
+### CLI Interactive Mode
+Run the local CLI to query your corpus directly:
 ```bash
 python ask.py
 ```
 
-Then ask questions about your team's conversations:
-
+### One-Shot Query & Debugging
+Run a query immediately from the terminal. Use `--debug` to see exactly how the orchestrator evaluates your question:
+```bash
+python ask.py "what are the recent deployment issues"
+python ask.py "redis cache problems" --debug
 ```
->> What did we discuss about the project deadline?
->> Who mentioned the API integration?
->> exit
-```
 
-## 📁 Project Structure
+## Project Structure
 
-```
+```text
 team-brain-python/
-├── ask.py              # Interactive query interface
-├── brain.py            # Knowledge base builder
-├── ingest.py           # Slack data ingestion
-├── memory.py           # ChromaDB vector operations
-├── requirements.txt    # Python dependencies
-├── .env               # Environment variables (not tracked)
-├── chroma_db/         # Vector database storage (generated)
-└── README.md          # Project documentation
+├── ask.py                  # CLI query interface
+├── slack_bot.py            # Slack presentation and events layer
+├── sync_job.py             # Scheduled incremental ingestion job
+├── requirements.txt        # Python dependencies
+├── .env                    # API keys
+├── config/
+│   ├── sync_state.json     # Incremental sync checkpoint
+│   └── diagnostics_cache.json # Offline LLM test fixtures
+├── docs/                   # Architecture, Setup, and Multilingual plans
+├── tests/                  # Unit and integration test suite
+├── memory/
+│   ├── storage.py          # ChromaDB collection management
+│   ├── service.py          # Core orchestrator and access control
+│   ├── privacy.py          # PII detection, redaction, routing
+│   └── ...                 # Core reasoning/RAG modules
+└── scripts/
+    └── diagnostics.py      # System diagnostics and evaluation
 ```
 
-## 🔧 Configuration
 
-### Confidence Threshold ([ask.py](ask.py))
 
-```python
-threshold = 1.2  # Lower = stricter matching
-```
+## License
 
-### Message Limit ([brain.py](brain.py))
-
-```python
-messages = get_threads_from_channel(CHANNEL_ID, limit=50)
-```
-
-### Number of Results ([memory.py](memory.py))
-
-```python
-results = collection.query(query_texts=[query], n_results=5)
-```
-
-## 🎓 How It Works
-
-1. **Ingestion**: Messages are fetched from Slack using the Slack SDK
-2. **Embedding**: Text is converted to vector embeddings using sentence transformers
-3. **Storage**: Embeddings are stored in ChromaDB with metadata
-4. **Retrieval**: User queries are embedded and matched against stored vectors
-5. **Ranking**: Results are ranked by similarity (distance) and filtered by confidence
-
-## 🔐 Security
-
-- Uses SSL certificate verification for Slack connections
-- Stores sensitive tokens in environment variables
-- Anonymous telemetry disabled for ChromaDB
-
-## 🚧 Future Enhancements
-
-- Multi-channel support
-- Real-time message syncing
-- Web interface for queries
-- Advanced filtering (date ranges, users, threads)
-- Export search results
-- Integration with LLM for answer generation
-
-## 📝 License
-
-[Add your license here]
-
-## 👥 Contributors
-
-[Add contributors here]
+This project is licensed under the [MIT License](LICENSE).

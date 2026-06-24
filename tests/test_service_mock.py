@@ -317,3 +317,39 @@ def test_cloud_route_returns_original_threads_and_citations(
     # 3. Assert _generate_answer was called with REDACTED threads
     gen_call_threads = mock_gen.call_args[0][1]
     assert gen_call_threads[0]["messages"][0]["document"] == "Contact [EMAIL]"
+
+
+@patch("memory.service.plan_query")
+@patch("memory.service.execute_plan")
+@patch("memory.service.evaluate_evidence")
+@patch("memory.service.scan_threads")
+@patch("memory.service._generate_answer")
+def test_broadened_catchup_uses_correct_scope_label(
+    mock_gen, mock_scan, mock_evid, mock_exec, mock_plan
+):
+    from memory.evidence import EvidenceResult
+    from memory.models import QueryPlan
+    from memory.privacy import PrivacyScan
+
+    mock_plan.return_value = QueryPlan(goal="catch_up")
+
+    def fake_execute(plan, query, timings, *args, **kwargs):
+        timings["_broadened"] = "2026-06-17"
+        return [{"thread_id": "123", "messages": [{"document": "test", "metadata": {"ts": "123", "author": "a"}}]}]
+
+    mock_exec.side_effect = fake_execute
+
+    mock_evid.return_value = EvidenceResult(
+        confidence=0.9, strong_enough=True, reason="high_relevance"
+    )
+
+    mock_scan.return_value = PrivacyScan(
+        route="cloud", redacted_query="query", findings={}, total_pii_count=0, high_sensitivity_found=False
+    )
+
+    mock_gen.return_value = ("Here is the summary of recent things.", 0.5)
+
+    response = answer_query("catch me up this week")
+
+    assert "since 2026-06-17" in response.answer
+    assert "for today" not in response.answer

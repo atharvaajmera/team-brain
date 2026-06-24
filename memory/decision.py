@@ -124,12 +124,16 @@ def _handle_search(
 
     # Track if we broadened the search
     broadened = False
+    original_after = None
 
     for step in plan.retrieval_steps:
         tool = step.tool
         step_query = step.query
         filters = step.filters.model_dump(exclude_none=True)
         limit = step.limit
+        
+        if original_after is None:
+            original_after = filters.get("after")
 
         after_windows = (
             _broaden_catch_up_filters(filters.get("after"))
@@ -167,7 +171,7 @@ def _handle_search(
                 break  # Stop broadening if we found results
 
     timings["retrieve"] = perf_counter() - t
-    return all_candidates, broadened
+    return all_candidates, broadened, original_after
 
 
 def _handle_summarize(
@@ -207,7 +211,7 @@ def _handle_summarize(
         all_candidates.extend(candidates)
 
     timings["retrieve"] = perf_counter() - t
-    return all_candidates, False
+    return all_candidates, False, None
 
 
 def execute_plan(
@@ -225,8 +229,9 @@ def execute_plan(
 
     # --- Route by goal ---
     broadened = False
+    original_after = None
     if goal == "summarize":
-        all_candidates, broadened = _handle_summarize(
+        all_candidates, broadened, original_after = _handle_summarize(
             query,
             plan,
             timings,
@@ -234,11 +239,11 @@ def execute_plan(
             allow_query_decomposition=allow_query_decomposition,
         )
     else:
-        all_candidates, broadened = _handle_search(
+        all_candidates, broadened, original_after = _handle_search(
             query, plan, timings, allowed_channel_ids
         )
 
-    timings["_broadened"] = broadened
+    timings["_broadened"] = original_after if broadened else None
 
     # --- Deduplicate ---
     t = perf_counter()

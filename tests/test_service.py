@@ -289,3 +289,15 @@ def test_evidence_strong_distance_ignores_overlap():
     assert result.confidence > 0.4
     # With 0 overlap but very strong distance, it should still be good_distance or high_relevance
     assert result.reason in ("good_distance", "high_relevance", "moderate_match")
+
+def test_local_plan_specific_question_uses_direct_format():
+    from memory.service import _local_plan_query
+    plan = _local_plan_query("what caused the redis outage?")
+    assert plan.answer_requirements.format == "direct"
+    assert plan.goal == "answer"
+
+def test_local_plan_decision_question_uses_decision_format():
+    from memory.service import _local_plan_query
+    plan = _local_plan_query("what was the final decision on the deployment?")
+    assert plan.answer_requirements.format == "decision"
+    assert plan.goal == "answer"

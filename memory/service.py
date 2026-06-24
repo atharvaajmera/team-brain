@@ -321,12 +321,22 @@ def answer_query(
     if evidence.strong_enough and evidence.confidence < 0.5:
         answer += "\n\n_Note: I found limited evidence for this query. The answer may be incomplete._"
 
-    if timings.get("_broadened"):
+    broadened_from = timings.get("_broadened")
+    if broadened_from:
+        from datetime import datetime
+        try:
+            dt = datetime.strptime(broadened_from, "%Y-%m-%d")
+            today = datetime.now().strftime("%Y-%m-%d")
+            if broadened_from == today:
+                scope_label = "today"
+            else:
+                scope_label = f"since {broadened_from}"
+        except ValueError:
+            scope_label = "that time range"
         answer = (
-            "_No recent activity was found for today. Here are the latest updates:_\n\n"
-            + answer
+            f"_No recent activity was found for {scope_label}. "
+            "Here are the latest updates:_\n\n" + answer
         )
-
     timings["summary"] = summary_time
 
     citations = _build_citations(threads)
