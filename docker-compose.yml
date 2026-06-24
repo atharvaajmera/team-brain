@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  chroma-db:
+    image: chromadb/chroma:latest
+    volumes:
+      - chroma-data:/chroma/chroma
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  bot:
+    build: .
+    command: ["python", "slack_bot.py"]
+    environment:
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - CHROMA_HOST=chroma-db
+      - CHROMA_PORT=8000
+    depends_on:
+      - chroma-db
+    restart: unless-stopped
+
+  sync-worker:
+    build: .
+    command: ["python", "sync_job.py"]
+    environment:
+      - SLACK_USER_TOKEN=${SLACK_USER_TOKEN}
+      - CHROMA_HOST=chroma-db
+      - CHROMA_PORT=8000
+    volumes:
+      - sync-state:/app/config
+    depends_on:
+      - chroma-db
+    restart: unless-stopped
+
+volumes:
+  chroma-data:
+  sync-state:
