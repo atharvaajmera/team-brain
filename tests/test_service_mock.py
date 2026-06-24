@@ -265,3 +265,55 @@ def test_access_control_falls_back_to_current_channel():
     allowed = _get_allowed_channels(mock_client, "U123", "C456")
 
     assert allowed == ["C456"]
+
+
+@patch("memory.service.plan_query")
+@patch("memory.service.execute_plan")
+@patch("memory.service.evaluate_evidence")
+@patch("memory.service.scan_threads")
+@patch("memory.service._generate_answer")
+def test_cloud_route_returns_original_threads_and_citations(
+    mock_gen, mock_scan, mock_evid, mock_exec, mock_plan
+):
+    from memory.evidence import EvidenceResult
+    from memory.models import QueryPlan
+    from memory.privacy import PrivacyScan
+
+    mock_plan.return_value = QueryPlan(goal="answer")
+    
+    original_threads = [{
+        "thread_id": "123",
+        "messages": [{
+            "document": "Contact alice@corp.com",
+            "metadata": {"author": "alice", "ts": "123456.789", "email": "alice@corp.com"}
+        }]
+    }]
+    mock_exec.return_value = original_threads
+
+    mock_evid.return_value = EvidenceResult(
+        confidence=0.9, strong_enough=True, reason="high_relevance"
+    )
+
+    mock_scan.return_value = PrivacyScan(
+        route="cloud",
+        redacted_query="Contact [EMAIL]",
+        findings={"email": ["alice@corp.com"]},
+        total_pii_count=1,
+        high_sensitivity_found=False,
+    )
+
+    mock_gen.return_value = ("Generated answer", 0.5)
+
+    response = answer_query("Contact alice@corp.com")
+
+    # 1. Assert response.threads contains original PII
+    assert response.threads[0]["messages"][0]["document"] == "Contact alice@corp.com"
+    
+    # 2. Assert citations contain original PII
+    assert len(response.citations) > 0
+    assert "alice@corp.com" in response.citations[0].snippet
+    assert "[EMAIL]" not in response.citations[0].snippet
+
+    # 3. Assert _generate_answer was called with REDACTED threads
+    gen_call_threads = mock_gen.call_args[0][1]
+    assert gen_call_threads[0]["messages"][0]["document"] == "Contact [EMAIL]"
