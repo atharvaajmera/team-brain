@@ -99,6 +99,10 @@ def generate_response(query, category, threads, stream=False, answer_reqs=None):
     context = build_context(threads)
     prompt = _build_prompt(query, category, context, answer_reqs)
 
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Local Route Triggered: Sending query to Ollama at %s", OLLAMA_URL)
+    
     payload = {
         "model": MODEL,
         "prompt": prompt,
