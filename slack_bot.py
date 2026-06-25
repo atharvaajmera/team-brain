@@ -43,18 +43,19 @@ def _strip_bot_mention(text: str) -> str:
 def _format_slack_response(result) -> str:
     """Format the QueryResponse into a Slack-friendly string."""
     if result.status == "reject":
-        return f"❌ {result.answer}"
+        return f"{result.answer}"
     if result.status == "clarify":
-        return f"❓ {result.clarification_question}"
+        return f"{result.clarification_question}"
     if result.status == "error":
-        return f"⚠️ Something went wrong: {result.answer}"
+        return f"Something went wrong: {result.answer}"
 
     msg = result.answer
     if result.citations:
-        msg += "\n\n*Sources:*\n"
-        for i, c in enumerate(result.citations, 1):
-            link = f"<{c.permalink}|{c.readable_ts}>" if c.permalink else c.readable_ts
-            msg += f"[{i}] {c.author} at {link}\n"
+        # Hide the links in the text but let Slack unfurl them automatically as message blocks
+        for c in result.citations:
+            if c.permalink:
+                # The zero-width space (&#8203;) hides the link text completely in Slack
+                msg += f" <{c.permalink}|&#8203;>"
     return msg
 
 
@@ -87,13 +88,13 @@ def handle_mention(event, say, client):
     try:
         if not _pending_requests.acquire(blocking=False):
             say(
-                text="⚠️ I’m handling too many requests right now. Please try again in a minute.",
+                text="I’m handling too many requests right now. Please try again in a minute.",
                 thread_ts=thread_ts,
             )
             return
         acquired_slot = True
 
-        ack_res = say(text="🔍 Looking into that...", thread_ts=thread_ts)
+        ack_res = say(text="Looking into that...", thread_ts=thread_ts)
         ack_ts = ack_res.get("ts") if isinstance(ack_res, dict) else None
 
         def process_query():
@@ -117,7 +118,7 @@ def handle_mention(event, say, client):
                     channel_id,
                     ack_ts,
                     thread_ts,
-                    "⚠️ Sorry, I encountered an internal error while processing your request.",
+                    "Sorry, I encountered an internal error while processing your request.",
                 )
             finally:
                 _pending_requests.release()
@@ -130,7 +131,7 @@ def handle_mention(event, say, client):
             _pending_requests.release()
         logger.error("Error initiating mention handling: %s", e, exc_info=True)
         say(
-            text="⚠️ Sorry, I encountered an internal error starting your request.",
+            text="Sorry, I encountered an internal error starting your request.",
             thread_ts=thread_ts,
         )
 
@@ -159,6 +160,14 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         pass
+
+
+@app.event("message")
+def handle_message_events(body, logger):
+    # Suppress warnings for general message events.
+    # The bot only responds to @app_mention events, but Slack sends all messages 
+    # if the app is subscribed to message.channels.
+    pass
 
 
 def start_health_server(port=8080):
