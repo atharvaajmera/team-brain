@@ -28,10 +28,59 @@ class PrivacyScan:
     route: str = "local"
     redacted_text: str = ""
     redacted_query: str = ""
+    redactor: "Redactor" = None
 
 
-def scan_text(text: str) -> PrivacyScan:
+class Redactor:
+    def __init__(self):
+        self.mapping = {}
+        self.counters = {}
+
+    def redact(self, text: str) -> str:
+        if not text:
+            return text
+        redacted = text
+        for pii_type, pattern in _PII_PATTERNS.items():
+            def repl(m):
+                original = m.group(0)
+                for token, val in self.mapping.items():
+                    if val == original:
+                        return token
+                count = self.counters.get(pii_type, 0) + 1
+                self.counters[pii_type] = count
+                token = f"[{pii_type.upper()}_{count}]"
+                self.mapping[token] = original
+                return token
+            redacted = pattern.sub(repl, redacted)
+        return redacted
+
+    def unredact(self, text: str) -> str:
+        if not text:
+            return text
+        unredacted = text
+        # Replace numbered tokens first: [EMAIL_1] -> security@acme.com
+        for token, original in self.mapping.items():
+            unredacted = unredacted.replace(token, original)
+        
+        # Fallback: LLMs sometimes drop the _N suffix and write [EMAIL] instead of [EMAIL_1].
+        # Build a map from bare type -> first original value for that type.
+        bare_fallbacks = {}
+        for token, original in self.mapping.items():
+            # Extract the type name: [EMAIL_1] -> EMAIL
+            bare = re.sub(r"_\d+\]$", "]", token)
+            if bare not in bare_fallbacks:
+                bare_fallbacks[bare] = original
+        for bare_token, original in bare_fallbacks.items():
+            unredacted = unredacted.replace(bare_token, original)
+        
+        return unredacted
+
+
+def scan_text(text: str, redactor: Redactor = None) -> PrivacyScan:
     result = PrivacyScan()
+    redactor = redactor or Redactor()
+    result.redactor = redactor
+    
     for pii_type, pattern in _PII_PATTERNS.items():
         matches = pattern.findall(text)
         if matches:
@@ -46,16 +95,15 @@ def scan_text(text: str) -> PrivacyScan:
         result.route = "local"
     else:
         result.route = "cloud"
-        result.redacted_text = redact(text)
+        result.redacted_text = redactor.redact(text)
         
     return result
 
 
 def redact(text: str) -> str:
-    redacted = text
-    for pii_type, pattern in _PII_PATTERNS.items():
-        redacted = pattern.sub(f"[{pii_type.upper()}]", redacted)
-    return redacted
+    # Backwards compatibility if needed, though we should use Redactor
+    redactor = Redactor()
+    return redactor.redact(text)
 
 
 def scan_threads(query: str, threads: list) -> PrivacyScan:
@@ -66,20 +114,22 @@ def scan_threads(query: str, threads: list) -> PrivacyScan:
             author = msg.get("metadata", {}).get("author", "")
             parts.append(f"{author}: {text}")
             
-    scan_result = scan_text("\n".join(parts))
-    scan_result.redacted_query = redact(query)
+    redactor = Redactor()
+    scan_result = scan_text("\n".join(parts), redactor=redactor)
+    scan_result.redacted_query = redactor.redact(query)
     return scan_result
 
 
-def redact_threads(threads: list) -> list:
+def redact_threads(threads: list, redactor: Redactor = None) -> list:
+    redactor = redactor or Redactor()
     redacted = copy.deepcopy(threads)
     for thread in redacted:
         for msg in thread.get("messages", []):
             if "document" in msg:
-                msg["document"] = redact(msg["document"])
+                msg["document"] = redactor.redact(msg["document"])
             meta = msg.get("metadata", {})
             if "text" in meta:
-                meta["text"] = redact(meta["text"])
+                meta["text"] = redactor.redact(meta["text"])
             if "author" in meta:
-                meta["author"] = redact(meta["author"])
+                meta["author"] = redactor.redact(meta["author"])
     return redacted

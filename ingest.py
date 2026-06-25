@@ -200,7 +200,7 @@ def get_threads_from_channel(channel_id, user_map=None, limit=None, after_ts=Non
             messages = [
                 msg
                 for msg in response.get("messages", [])
-                if not _is_system_message(msg.get("text", ""))
+                if not _is_system_message(msg.get("text", "")) and not msg.get("bot_id") and msg.get("subtype") != "bot_message"
             ]
 
             for msg in messages:
@@ -234,7 +234,7 @@ def get_threads_from_channel(channel_id, user_map=None, limit=None, after_ts=Non
                             replies = [
                                 r
                                 for r in msgs_in_reply
-                                if not _is_system_message(r.get("text", ""))
+                                if not _is_system_message(r.get("text", "")) and not r.get("bot_id") and r.get("subtype") != "bot_message"
                             ]
                             for reply in replies:
                                 reply["author"] = _get_author(reply, user_map)

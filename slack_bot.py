@@ -51,11 +51,14 @@ def _format_slack_response(result) -> str:
 
     msg = result.answer
     if result.citations:
-        # Hide the links in the text but let Slack unfurl them automatically as message blocks
+        seen = set()
+        links = []
         for c in result.citations:
-            if c.permalink:
-                # The zero-width space (&#8203;) hides the link text completely in Slack
-                msg += f" <{c.permalink}|&#8203;>"
+            if c.permalink and c.permalink not in seen:
+                seen.add(c.permalink)
+                links.append(c.permalink)
+        if links:
+            msg += "\n\n" + "\n".join(links)
     return msg
 
 

@@ -311,12 +311,15 @@ def answer_query(
         if (no_cloud or query_scan.route == "local" or scan.route == "local")
         else "cloud"
     )
-    llm_threads = redact_threads(threads) if route == "cloud" else threads
+    llm_threads = redact_threads(threads, scan.redactor) if route == "cloud" else threads
     timings["redact"] = perf_counter() - t
 
     answer, summary_time = _generate_answer(
         query, llm_threads, route, plan, scan.redacted_query
     )
+    
+    if route == "cloud" and scan.redactor:
+        answer = scan.redactor.unredact(answer)
 
     if evidence.strong_enough and evidence.confidence < 0.5:
         answer += "\n\n_Note: I found limited evidence for this query. The answer may be incomplete._"
