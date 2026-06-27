@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   chroma-db:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:0.5.5
     volumes:
       - chroma-data:/chroma/chroma
     ports:
@@ -11,11 +9,15 @@ services:
 
   bot:
     build: .
-    command: ["python", "slack_bot.py"]
+    command: ["slack_bot.py"]
     environment:
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
       - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - OLLAMA_URL=${OLLAMA_URL}
+      - MODEL=${MODEL}
+      - SLACK_WORKSPACE=${SLACK_WORKSPACE}
+      - PORT=${PORT}
       - CHROMA_HOST=chroma-db
       - CHROMA_PORT=8000
     depends_on:
@@ -24,9 +26,10 @@ services:
 
   sync-worker:
     build: .
-    command: ["python", "sync_job.py"]
+    command: ["sync_job.py"]
     environment:
-      - SLACK_USER_TOKEN=${SLACK_USER_TOKEN}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - GROQ_API_KEY=${GROQ_API_KEY}
       - CHROMA_HOST=chroma-db
       - CHROMA_PORT=8000
     volumes:
