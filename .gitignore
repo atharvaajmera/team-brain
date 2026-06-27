@@ -6,3 +6,4 @@ chroma_db/
 config/benchmark_queries.json
 config/parameters.json
 config/sync_state.json
+team-brain-key.pem

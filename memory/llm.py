@@ -8,11 +8,15 @@ OLLAMA_URL = settings.OLLAMA_URL
 MODEL = settings.MODEL
 
 
+# Headers to bypass ngrok's free-tier browser interstitial
+_NGROK_HEADERS = {"ngrok-skip-browser-warning": "true"}
+
+
 def is_ollama_available(timeout=2):
     """Quick health check: can we reach Ollama?"""
     try:
         health_url = OLLAMA_URL.replace("/api/generate", "")
-        resp = requests.get(health_url, timeout=timeout)
+        resp = requests.get(health_url, timeout=timeout, headers=_NGROK_HEADERS)
         return resp.status_code == 200
     except Exception:
         return False
@@ -83,7 +87,7 @@ def _build_prompt(query, category, context, answer_reqs=None):
 
 def _stream_response(payload):
     """Yield tokens one by one from Ollama streaming endpoint."""
-    resp = requests.post(OLLAMA_URL, json=payload, stream=True, timeout=120)
+    resp = requests.post(OLLAMA_URL, json=payload, stream=True, timeout=120, headers=_NGROK_HEADERS)
     resp.raise_for_status()
     for line in resp.iter_lines():
         if line:
@@ -112,6 +116,6 @@ def generate_response(query, category, threads, stream=False, answer_reqs=None):
     if stream:
         return _stream_response(payload)
 
-    resp = requests.post(OLLAMA_URL, json=payload, timeout=120)
+    resp = requests.post(OLLAMA_URL, json=payload, timeout=120, headers=_NGROK_HEADERS)
     resp.raise_for_status()
     return resp.json().get("response", "")

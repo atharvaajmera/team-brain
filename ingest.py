@@ -4,6 +4,8 @@ import os
 import ssl
 import time
 
+import re
+
 import certifi
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -20,6 +22,21 @@ SLACK_SYNC_TOKEN = settings.SLACK_SYNC_TOKEN
 ssl_context = ssl.create_default_context(cafile=certifi.where())
 
 client = WebClient(token=SLACK_SYNC_TOKEN, ssl=ssl_context)
+
+
+# Pattern to match Slack bot mentions like <@U12345ABC>
+_BOT_MENTION_RE = re.compile(r"<@[UW][A-Z0-9]+>")
+
+
+def _is_bot_mention_query(text):
+    """Return True if this message is just a user tagging the bot with a question.
+
+    These are queries TO the bot, not team knowledge, and they pollute
+    search results by being semantically identical to actual user queries.
+    """
+    text = (text or "").strip()
+    # If the message starts with a bot mention, it's a query to the bot
+    return bool(_BOT_MENTION_RE.match(text))
 
 
 def _is_system_message(text):
@@ -200,7 +217,10 @@ def get_threads_from_channel(channel_id, user_map=None, limit=None, after_ts=Non
             messages = [
                 msg
                 for msg in response.get("messages", [])
-                if not _is_system_message(msg.get("text", "")) and not msg.get("bot_id") and msg.get("subtype") != "bot_message"
+                if not _is_system_message(msg.get("text", ""))
+                and not msg.get("bot_id")
+                and msg.get("subtype") != "bot_message"
+                and not _is_bot_mention_query(msg.get("text", ""))
             ]
 
             for msg in messages:
@@ -234,7 +254,10 @@ def get_threads_from_channel(channel_id, user_map=None, limit=None, after_ts=Non
                             replies = [
                                 r
                                 for r in msgs_in_reply
-                                if not _is_system_message(r.get("text", "")) and not r.get("bot_id") and r.get("subtype") != "bot_message"
+                                if not _is_system_message(r.get("text", ""))
+                                and not r.get("bot_id")
+                                and r.get("subtype") != "bot_message"
+                                and not _is_bot_mention_query(r.get("text", ""))
                             ]
                             for reply in replies:
                                 reply["author"] = _get_author(reply, user_map)
