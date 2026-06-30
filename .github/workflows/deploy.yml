@@ -1,0 +1,36 @@
+name: Deploy to EC2 Production
+
+on:
+  push:
+    branches:
+      - main 
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Execute Remote SSH Commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Starting deployment..."
+            
+            # 1. Navigate to the app directory
+            cd ~/team-brain
+            
+            # 2. Pull the newest changes from GitHub
+            git pull origin main
+            
+            # 3. Rebuild the Docker containers with the new code
+            # Note: We do NOT use 'down -v' here so we don't wipe your ChromaDB vector storage!
+            sudo docker compose up -d --build
+            
+            echo "Deployment successful!"
