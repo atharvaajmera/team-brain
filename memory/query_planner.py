@@ -44,10 +44,10 @@ Tool guidelines:
 - author_search: use for "what did alice say?". Put username in filters.author, and topic in query.
 
 Goal guidelines:
-- answer: specific question about a topic (e.g. "what caused the redis outage?")
+- answer: specific question about a topic, person, role, decision, or anything that COULD be discussed in Slack (e.g. "what caused the redis outage?", "who is the CTO?", "who is prakhar?")
 - catch_up: temporal recency queries (e.g. "catch me up", "what happened today?")
 - summarize: broad overviews spanning multiple topics (e.g. "summarize all issues", "give an overview of backend problems", "what are all the things the team discussed?")
-- reject: off-topic or non-Slack queries (e.g. "tell me a joke", "what's the weather?")
+- reject: ONLY for queries that are completely unrelated to workplace topics (e.g. "tell me a joke", "what's the weather?", "solve 2+2"). Questions about people, roles, teams, projects, decisions, or anything that could appear in Slack should NEVER be rejected — use "answer" instead.
 
 Format guidelines:
 - direct: concise answer
