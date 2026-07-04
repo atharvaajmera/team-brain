@@ -21,13 +21,15 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
             echo "Starting deployment..."
             
             # 1. Navigate to the app directory
             cd ~/team-brain
             
-            # 2. Pull the newest changes from GitHub
-            git pull origin main
+            # 2. Force-sync to the latest code from GitHub
+            git fetch origin main
+            git reset --hard origin/main
             
             # 3. Rebuild the Docker containers with the new code
             # Note: We do NOT use 'down -v' here so we don't wipe your ChromaDB vector storage!
