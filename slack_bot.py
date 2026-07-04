@@ -166,11 +166,65 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
 
 
 @app.event("message")
-def handle_message_events(body, logger):
-    # Suppress warnings for general message events.
-    # The bot only responds to @app_mention events, but Slack sends all messages 
-    # if the app is subscribed to message.channels.
-    pass
+def handle_message_events(event, client, logger):
+    """Real-time ingestion: embed new messages into ChromaDB as they arrive."""
+    # Skip bot messages, subtypes (edits, deletes, joins, etc.), and empty text
+    if event.get("bot_id") or event.get("subtype"):
+        return
+
+    text = event.get("text", "").strip()
+    if not text:
+        return
+
+    # Skip system messages and queries directed at the bot
+    from ingest import _is_system_message, _is_bot_mention_query
+    if _is_system_message(text) or _is_bot_mention_query(text):
+        return
+
+    channel_id = event.get("channel", "")
+    user_id = event.get("user", "")
+    ts = event.get("ts", "")
+    thread_ts = event.get("thread_ts", ts)
+
+    if not channel_id or not user_id or not ts:
+        return
+
+    # Resolve the author's display name
+    display_name = user_id
+    try:
+        user_info = client.users_info(user=user_id)
+        profile = user_info.get("user", {}).get("profile", {})
+        display_name = (
+            profile.get("display_name")
+            or profile.get("real_name")
+            or user_id
+        )
+    except Exception:
+        pass
+
+    norm_name = display_name.lower().replace(" ", "_")
+    text_to_embed = f"{display_name}: {text}"
+    doc_id = f"slack:{channel_id}:{ts}"
+
+    metadata = {
+        "author": norm_name,
+        "author_id": user_id,
+        "author_display": display_name,
+        "ts": float(ts),
+        "text": text,
+        "thread_id": float(thread_ts),
+        "channel_id": channel_id,
+    }
+
+    def _ingest():
+        try:
+            from memory.storage import add_messages
+            add_messages([text_to_embed], [doc_id], [metadata])
+            logger.info("Real-time ingested message from %s in %s", display_name, channel_id)
+        except Exception as e:
+            logger.error("Real-time ingestion failed: %s", e)
+
+    _executor.submit(_ingest)
 
 
 def start_health_server(port=8080):
