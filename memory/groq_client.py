@@ -17,10 +17,15 @@ def generate_answer(query: str, context: str, answer_reqs: dict = None) -> str:
     cite = answer_reqs.get("cite_sources", True)
     
     cite_rule = (
-        "- When citing, reference the author and timestamp: e.g. '@alice (2026-05-03 14:30)'.\n"
-        "- If a Slack permalink is available in the thread data, include it."
+        "- When citing, reference the author and timestamp only: e.g. '@alice (2026-05-03 14:30)'.\n"
+        "- Do NOT invent permalinks or write 'Permalink: Not available'.\n"
+        "- Do NOT paste raw Slack URLs; the system appends source links separately.\n"
+        "- Quote message body only — do not repeat the author name inside the quote."
     ) if cite else "- No need for explicit citations."
-    format_rule = f"- Format your response as a {format_str}."
+    format_rule = (
+        f"- Format your response as a {format_str}. "
+        "Keep it concise (2-4 sentences for direct answers)."
+    )
 
     prompt = (
         "You are a helpful assistant for a software engineering team. "

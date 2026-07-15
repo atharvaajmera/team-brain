@@ -27,38 +27,49 @@ def is_corpus_ready() -> bool:
 
 
 def _build_citations(threads: list[dict]) -> list[dict]:
-    # We will just return the raw threads for now, and let `ask.py` format them,
-    # or we can build the citation models here. Let's do it in `ask.py` for now
-    # to avoid changing `ask.py` format logic too much, or we can use the Citation model.
-    # The models.py has a Citation model. Let's build it.
+    """One citation per top thread (root/best message), max 3 — avoid link spam."""
     from memory.citations import make_permalink, ts_to_readable
+    from memory.llm import _message_body
     from memory.models import Citation
 
     citations = []
     for thread in threads[:3]:
+        msgs = thread.get("messages") or []
+        if not msgs:
+            continue
         thread_id = thread.get("thread_id", "?")
-        for msg in thread.get("messages", [])[:2]:
-            meta = msg.get("metadata", {})
-            author = meta.get("author_display", meta.get("author", "unknown"))
-            ts = meta.get("ts", "?")
-            channel_id = meta.get("channel_id", "")
-            readable_ts = ts_to_readable(ts)
-            permalink = make_permalink(channel_id, ts)
+        # Prefer root message (thread_id == ts); else first in chronological list
+        root = None
+        for msg in msgs:
+            meta = msg.get("metadata") or {}
+            try:
+                if float(meta.get("ts", 0)) == float(thread_id):
+                    root = msg
+                    break
+            except (TypeError, ValueError):
+                pass
+        msg = root or msgs[0]
+        meta = msg.get("metadata") or {}
+        author = meta.get("author_display") or meta.get("author") or "unknown"
+        ts = meta.get("ts", "?")
+        channel_id = meta.get("channel_id", "")
+        readable_ts = ts_to_readable(ts)
+        permalink = make_permalink(channel_id, ts)
 
-            text = " ".join((msg.get("document", "")).split())
-            snippet = text if len(text) <= 120 else text[:117] + "..."
+        text = " ".join(_message_body(msg).split())
+        snippet = text if len(text) <= 120 else text[:117] + "..."
 
-            citations.append(
-                Citation(
-                    author=author,
-                    ts=ts,
-                    readable_ts=readable_ts,
-                    channel_id=channel_id,
-                    permalink=permalink,
-                    snippet=snippet,
-                    thread_id=thread_id,
-                )
+        citations.append(
+            Citation(
+                author=author,
+                ts=ts,
+                readable_ts=readable_ts,
+                channel_id=channel_id,
+                permalink=permalink,
+                snippet=snippet,
+                thread_id=thread_id,
             )
+        )
     return citations
 
 

@@ -22,6 +22,29 @@ def is_ollama_available(timeout=2):
         return False
 
 
+def _message_body(msg: dict) -> str:
+    """Prefer raw message text; strip leading 'Author: ' prefix from embedded docs."""
+    meta = msg.get("metadata") or {}
+    text = (meta.get("text") or msg.get("document") or "").strip()
+    if not text:
+        return ""
+    # Stored docs are often "Display Name: actual message"
+    author = (
+        meta.get("author_display")
+        or meta.get("author")
+        or meta.get("user")
+        or ""
+    )
+    if author:
+        prefix = f"{author}:"
+        if text.lower().startswith(prefix.lower()):
+            text = text[len(prefix) :].lstrip()
+        norm = str(author).lower().replace(" ", "_")
+        if norm and text.lower().startswith(f"{norm}:"):
+            text = text[len(norm) + 1 :].lstrip()
+    return text
+
+
 def build_context(threads, include_permalinks=True):
     if not threads:
         return "(no relevant threads found)"
@@ -33,10 +56,10 @@ def build_context(threads, include_permalinks=True):
         msgs = thread.get("messages", [])
         lines = []
         for msg in msgs:
-            meta = msg.get("metadata", {})
-            user = meta.get("author", meta.get("user", "unknown"))
+            meta = msg.get("metadata") or {}
+            user = meta.get("author_display") or meta.get("author") or meta.get("user") or "unknown"
             ts = meta.get("ts", "")
-            text = msg.get("document", "")
+            text = _message_body(msg)
             readable_ts = ts_to_readable(ts)
             channel_id = meta.get("channel_id", "")
             permalink = make_permalink(channel_id, ts) if include_permalinks else ""
@@ -61,13 +84,17 @@ def _build_prompt(query, category, context, answer_reqs=None):
 
     cite_rule = (
         (
-            "- When citing, reference the author and timestamp: e.g. '@alice (2026-05-03 14:30)'.\n"
-            "- If a Slack permalink is available in the thread data, include it."
+            "- When citing, reference the author and timestamp only: e.g. '@alice (2026-05-03 14:30)'.\n"
+            "- Do NOT invent permalinks or write 'Permalink: Not available'.\n"
+            "- Do NOT paste raw Slack URLs; the system appends source links separately.\n"
+            "- Quote message body only — do not repeat the author name inside the quote."
         )
         if cite
         else "- No need for explicit citations."
     )
-    format_rule = f"- Format your response as a {format_str}."
+    format_rule = (
+        f"- Format your response as a {format_str}. Keep it concise (2-4 sentences for direct answers)."
+    )
 
     return (
         "You are a helpful assistant for a software engineering team. "

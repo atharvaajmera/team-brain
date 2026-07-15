@@ -49,16 +49,32 @@ def _format_slack_response(result) -> str:
     if result.status == "error":
         return f"Something went wrong: {result.answer}"
 
-    msg = result.answer
+    msg = (result.answer or "").strip()
+    # Drop model-invented dead permalink lines
+    cleaned_lines = []
+    for line in msg.splitlines():
+        low = line.strip().lower()
+        if low.startswith("permalink") and (
+            "not available" in low or low.endswith(":")
+        ):
+            continue
+        cleaned_lines.append(line)
+    msg = "\n".join(cleaned_lines).strip()
+
     if result.citations:
         seen = set()
         links = []
         for c in result.citations:
             if c.permalink and c.permalink not in seen:
                 seen.add(c.permalink)
-                links.append(c.permalink)
+                label = f"@{c.author}" if c.author else "source"
+                if c.readable_ts:
+                    label += f", {c.readable_ts}"
+                # Slack mrkdwn link; plain dash avoids encoding issues in some clients
+                links.append(f"- <{c.permalink}|{label}>")
         if links:
-            msg += "\n\n" + "\n".join(links)
+            # Cap to 3 source links so Slack replies stay readable
+            msg += "\n\n*Sources:*\n" + "\n".join(links[:3])
     return msg
 
 

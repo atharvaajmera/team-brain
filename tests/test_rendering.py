@@ -92,7 +92,7 @@ def test_slack_ok_response():
         status="ok",
         goal="answer",
         route="cloud",
-        answer="Slack generated answer.",
+        answer="Slack generated answer.\nPermalink to the conversation: Not available",
         citations=[
             Citation(
                 author="bob",
@@ -105,10 +105,12 @@ def test_slack_ok_response():
         ]
     )
     output = _format_slack_response(resp)
-    
+
     assert output.startswith("Slack generated answer.")
+    assert "Permalink" not in output
+    assert "Not available" not in output
     assert "*Sources:*" in output
-    assert "[1] bob at <https://slack.com/archives/123|2023-11-14>" in output
+    assert "<https://slack.com/archives/123|@bob, 2023-11-14>" in output
 
 def test_slack_clarify_response():
     resp = QueryResponse(
@@ -119,8 +121,8 @@ def test_slack_clarify_response():
         clarification_question="Did you mean X or Y?"
     )
     output = _format_slack_response(resp)
-    
-    assert output.startswith("❓ Did you mean X or Y?")
+
+    assert output == "Did you mean X or Y?"
 
 def test_slack_reject_response():
     resp = QueryResponse(
@@ -130,8 +132,8 @@ def test_slack_reject_response():
         answer="No relevant threads."
     )
     output = _format_slack_response(resp)
-    
-    assert output.startswith("❌ No relevant threads.")
+
+    assert output == "No relevant threads."
 
 def test_citations_show_original_not_redacted():
     # If the issue 1 fix works, service.py passes original threads to _build_citations
