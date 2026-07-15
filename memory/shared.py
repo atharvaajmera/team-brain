@@ -109,10 +109,13 @@ def group_threads(candidates):
     """
     threads = {}
     for c in candidates:
-        tid = c["metadata"]["thread_id"]
+        meta = c.get("metadata") or {}
+        tid = meta.get("thread_id", meta.get("ts", c.get("id")))
+        if tid is None:
+            continue
         threads.setdefault(tid, {"candidates": [], "distances": []})
         threads[tid]["candidates"].append(c)
-        threads[tid]["distances"].append(c["distance"])
+        threads[tid]["distances"].append(c.get("distance", 1.0))
 
     aggregates = []
     for tid, td in threads.items():

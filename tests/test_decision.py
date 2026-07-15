@@ -29,7 +29,7 @@ def test_decision_boost_consistent_with_ascending_sort(mock_fetch, mock_search):
     mock_search.return_value = ([
         {"id": "1", "document": "we decided to go with X", "distance": 0.5, "metadata": {"thread_id": "t1", "ts": "100", "channel_id": "C1"}},
         {"id": "2", "document": "just a normal discussion", "distance": 0.3, "metadata": {"thread_id": "t2", "ts": "200", "channel_id": "C1"}},
-    ], False)
+    ], False, None)
     
     # Mock fetch returns dummy thread structs to avoid crashing
     mock_fetch.return_value = [
@@ -65,7 +65,7 @@ def test_timeline_sorts_chronologically(mock_fetch, mock_search):
     mock_search.return_value = ([
         {"id": "1", "document": "newer", "distance": 0.3, "metadata": {"thread_id": "t1", "ts": "200", "channel_id": "C1"}},
         {"id": "2", "document": "older", "distance": 0.3, "metadata": {"thread_id": "t2", "ts": "100", "channel_id": "C1"}},
-    ], False)
+    ], False, None)
     
     def fetch_side_effect(specs):
         return [{"thread_id": tid} for tid, cid in specs]

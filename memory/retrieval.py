@@ -54,6 +54,15 @@ def build_chroma_filter(filters, allowed_channel_ids=None):
 
 
 def _query_collection(query, chroma_filter=None, n_results=40):
+    # Chroma 0.5.x raises when n_results > collection size (even with filters).
+    try:
+        total = collection.count()
+    except Exception:
+        total = 0
+    if total <= 0:
+        return []
+    n_results = max(1, min(int(n_results or 40), total))
+
     results = collection.query(
         query_texts=[query],
         n_results=n_results,
@@ -61,21 +70,23 @@ def _query_collection(query, chroma_filter=None, n_results=40):
         include=['documents', 'metadatas', 'distances', 'embeddings']
     )
 
-    if not results['documents'] or not results['documents'][0]:
+    if not results.get('documents') or not results['documents'][0]:
         return []
 
     docs = results['documents'][0]
     metas = results['metadatas'][0]
     ids = results['ids'][0]
     dists = results['distances'][0]
-    embs = results['embeddings'][0]
+    # embeddings may be None depending on Chroma version / include support
+    raw_embs = results.get('embeddings')
+    embs = raw_embs[0] if raw_embs and raw_embs[0] is not None else [None] * len(docs)
 
     candidates = []
     for doc, meta, id, dist, emb in zip(docs, metas, ids, dists, embs):
         candidates.append({
             "id": id,
             "document": doc,
-            "metadata": meta,
+            "metadata": meta or {},
             "distance": dist,
             "embedding": emb
         })
@@ -277,26 +288,27 @@ def execute_semantic_search(query, filters=None, limit=40, use_prf=False, allowe
 def execute_recent_threads(filters=None, limit=10, allowed_channel_ids=None):
     """Fetch the most recent messages by timestamp, no semantic search."""
     chroma_filter = build_chroma_filter(filters, allowed_channel_ids=allowed_channel_ids)
-    
-    results = collection.get(
-        where=chroma_filter,
-        include=['documents', 'metadatas']
-    )
-    
-    if not results['documents']:
+
+    get_kwargs = {"include": ["documents", "metadatas"]}
+    if chroma_filter is not None:
+        get_kwargs["where"] = chroma_filter
+
+    results = collection.get(**get_kwargs)
+
+    if not results.get("documents"):
         return []
-        
+
     candidates = []
-    for doc, meta, id_ in zip(results['documents'], results['metadatas'], results['ids']):
+    for doc, meta, id_ in zip(results["documents"], results["metadatas"], results["ids"]):
         candidates.append({
             "id": id_,
             "document": doc,
-            "metadata": meta,
+            "metadata": meta or {},
             "distance": 0.0,
-            "embedding": None
+            "embedding": None,
         })
-        
+
     # Sort by timestamp descending
-    candidates.sort(key=lambda x: float(x["metadata"].get("ts", 0)), reverse=True)
-    
+    candidates.sort(key=lambda x: float((x["metadata"] or {}).get("ts", 0) or 0), reverse=True)
+
     return candidates[:limit]

@@ -23,11 +23,13 @@ ssl_context = ssl.create_default_context(cafile=certifi.where())
 
 client = WebClient(token=SLACK_SYNC_TOKEN, ssl=ssl_context)
 
-# Resolve the bot's own user ID so we can filter only its messages,
-# not all messages posted through app-issued OAuth tokens.
+# Always resolve the *bot app* user ID via the bot token.
+# Sync token may be a user token (xoxp-); auth_test on that would return a human
+# user_id and we'd incorrectly drop that person's messages from the archive.
 _BOT_USER_ID = None
 try:
-    _auth = client.auth_test()
+    bot_token = settings.SLACK_BOT_TOKEN or SLACK_SYNC_TOKEN
+    _auth = WebClient(token=bot_token, ssl=ssl_context).auth_test()
     _BOT_USER_ID = _auth.get("user_id")
     logger.info(f"Bot user ID resolved: {_BOT_USER_ID}")
 except Exception as e:

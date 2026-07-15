@@ -11,10 +11,13 @@ def _rank_recent_threads(candidates):
     """Group recent candidates by thread_id and rank by newest timestamp."""
     threads = {}
     for c in candidates:
-        tid = c["metadata"]["thread_id"]
+        meta = c.get("metadata") or {}
+        tid = meta.get("thread_id", meta.get("ts", c.get("id")))
+        if tid is None:
+            continue
         threads.setdefault(tid, {"candidates": [], "ts_list": []})
         threads[tid]["candidates"].append(c)
-        ts = float(c["metadata"].get("ts", 0))
+        ts = float(meta.get("ts", 0) or 0)
         threads[tid]["ts_list"].append(ts)
 
     aggregates = []

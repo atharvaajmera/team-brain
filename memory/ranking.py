@@ -293,14 +293,17 @@ def select_anchor(candidates, mode):
     # --- Group candidates by thread ---
     threads = {}
     for candidate in candidates:
-        thread_id = candidate['metadata']['thread_id']
+        meta = candidate.get('metadata') or {}
+        thread_id = meta.get('thread_id', meta.get('ts', candidate.get('id')))
+        if thread_id is None:
+            continue
         if thread_id not in threads:
             threads[thread_id] = {
                 'candidates': [],
                 'distances': []
             }
         threads[thread_id]['candidates'].append(candidate)
-        threads[thread_id]['distances'].append(candidate['distance'])
+        threads[thread_id]['distances'].append(candidate.get('distance', 1.0))
     
     # --- Compute thread scores ---
     thread_aggregates = []
