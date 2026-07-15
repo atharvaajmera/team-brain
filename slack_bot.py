@@ -168,8 +168,11 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
 @app.event("message")
 def handle_message_events(event, client, logger):
     """Real-time ingestion: embed new messages into ChromaDB as they arrive."""
-    # Skip bot messages, subtypes (edits, deletes, joins, etc.), and empty text
-    if event.get("bot_id") or event.get("subtype"):
+    # Skip bot's own messages, subtypes (edits, deletes, joins, etc.), and empty text
+    # Note: we check user ID, not bot_id, because app-issued OAuth user tokens
+    # also have bot_id set by Slack, which would incorrectly filter real user messages.
+    from ingest import _BOT_USER_ID
+    if event.get("subtype") or event.get("user") == _BOT_USER_ID:
         return
 
     text = event.get("text", "").strip()

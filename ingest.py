@@ -23,6 +23,16 @@ ssl_context = ssl.create_default_context(cafile=certifi.where())
 
 client = WebClient(token=SLACK_SYNC_TOKEN, ssl=ssl_context)
 
+# Resolve the bot's own user ID so we can filter only its messages,
+# not all messages posted through app-issued OAuth tokens.
+_BOT_USER_ID = None
+try:
+    _auth = client.auth_test()
+    _BOT_USER_ID = _auth.get("user_id")
+    logger.info(f"Bot user ID resolved: {_BOT_USER_ID}")
+except Exception as e:
+    logger.warning(f"Could not resolve bot user ID: {e}")
+
 
 # Pattern to match Slack bot mentions like <@U12345ABC>
 _BOT_MENTION_RE = re.compile(r"<@[UW][A-Z0-9]+>")
@@ -218,7 +228,7 @@ def get_threads_from_channel(channel_id, user_map=None, limit=None, after_ts=Non
                 msg
                 for msg in response.get("messages", [])
                 if not _is_system_message(msg.get("text", ""))
-                and not msg.get("bot_id")
+                and msg.get("user") != _BOT_USER_ID
                 and msg.get("subtype") != "bot_message"
                 and not _is_bot_mention_query(msg.get("text", ""))
             ]
@@ -255,7 +265,7 @@ def get_threads_from_channel(channel_id, user_map=None, limit=None, after_ts=Non
                                 r
                                 for r in msgs_in_reply
                                 if not _is_system_message(r.get("text", ""))
-                                and not r.get("bot_id")
+                                and r.get("user") != _BOT_USER_ID
                                 and r.get("subtype") != "bot_message"
                                 and not _is_bot_mention_query(r.get("text", ""))
                             ]
