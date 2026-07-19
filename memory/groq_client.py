@@ -4,6 +4,7 @@ import os
 import logging
 from groq import Groq
 from memory.settings import settings
+from memory.shared import strip_reasoning
 
 logger = logging.getLogger("groq_client")
 
@@ -45,9 +46,9 @@ def generate_answer(query: str, context: str, answer_reqs: dict = None) -> str:
             messages=[{"role": "user", "content": prompt}],
             model=_MODEL,
             temperature=0.3,
-            max_tokens=1024,
+            max_tokens=2048,
         )
-        return response.choices[0].message.content.strip()
+        return strip_reasoning(response.choices[0].message.content)
     except Exception as e:
         logger.error(f"[groq_client] Generation failed: {e}")
         return ""

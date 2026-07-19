@@ -19,6 +19,19 @@ ENTROPY_TEMP = 0.1        # Default softmax temperature
 MIN_THREAD_SIZE = 2       # Minimum messages for a thread to be considered in NORMAL mode
 MAX_RETRIEVAL_RESULTS = 40
 
+
+def strip_reasoning(text: str) -> str:
+    """Remove <think>...</think> blocks emitted by reasoning models (e.g. Qwen).
+
+    If the block is unterminated (output truncated mid-reasoning), the whole
+    text is reasoning, so return an empty string and let callers fall back.
+    """
+    if "</think>" in text:
+        return text.rsplit("</think>", 1)[1].strip()
+    if "<think>" in text:
+        return ""
+    return text.strip()
+
 STOPWORDS = {
     "about", "after", "again", "against", "also", "another", "any", "are", "back",
     "because", "been", "before", "being", "between", "both", "but", "could",

@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from groq import Groq
 from memory.settings import settings
 from memory.models import QueryPlan, RetrievalStep, AnswerRequirements
+from memory.shared import strip_reasoning
 
 _client = Groq(api_key=settings.GROQ_API_KEY)
 _MODEL = settings.GROQ_MODEL
@@ -111,11 +112,11 @@ def plan_query(user_query: str) -> QueryPlan:
             messages=[{"role": "user", "content": prompt + f"\n\nUser query: {user_query}"}],
             model=_MODEL,
             temperature=0.0,
-            max_tokens=512,
+            max_tokens=1536,
             response_format={"type": "json_object"},
         )
 
-        text = response.choices[0].message.content.strip()
+        text = strip_reasoning(response.choices[0].message.content)
         if text.startswith("```"):
             text = text.split("\n", 1)[1]
         if text.endswith("```"):

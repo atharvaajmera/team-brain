@@ -12,6 +12,7 @@ import json
 import logging
 from groq import Groq
 from memory.settings import settings
+from memory.shared import strip_reasoning
 
 logger = logging.getLogger("decomposition")
 _client = Groq(api_key=settings.GROQ_API_KEY)
@@ -69,11 +70,11 @@ def decompose_query(user_query: str) -> dict:
             ],
             model=_MODEL,
             temperature=0.0,
-            max_tokens=256,
+            max_tokens=1024,
             response_format={"type": "json_object"},
         )
 
-        text = response.choices[0].message.content.strip()
+        text = strip_reasoning(response.choices[0].message.content)
         # Strip markdown fences if present
         if text.startswith("```"):
             text = text.split("\n", 1)[1]
