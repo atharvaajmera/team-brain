@@ -15,7 +15,7 @@ from memory.settings import settings
 
 logger = logging.getLogger("decomposition")
 _client = Groq(api_key=settings.GROQ_API_KEY)
-_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+_MODEL = settings.GROQ_MODEL
 
 _DECOMPOSE_PROMPT = """\
 You are a query decomposition engine for a Slack archive search bot.

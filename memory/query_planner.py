@@ -10,7 +10,7 @@ from memory.settings import settings
 from memory.models import QueryPlan, RetrievalStep, AnswerRequirements
 
 _client = Groq(api_key=settings.GROQ_API_KEY)
-_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+_MODEL = settings.GROQ_MODEL
 
 _SYSTEM_PROMPT = """\
 You are a query parser for a Slack archive search bot.

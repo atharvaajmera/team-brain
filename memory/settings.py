@@ -19,6 +19,7 @@ class Settings:
     SLACK_CHANNEL_ID: str = os.getenv("SLACK_CHANNEL_ID", "")
     SLACK_WORKSPACE: str = os.getenv("SLACK_WORKSPACE", "")
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
     OLLAMA_URL: str = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
     MODEL: str = os.getenv("MODEL", "llama3.2")
 

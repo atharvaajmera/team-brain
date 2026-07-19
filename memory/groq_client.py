@@ -8,8 +8,7 @@ from memory.settings import settings
 logger = logging.getLogger("groq_client")
 
 _client = Groq(api_key=settings.GROQ_API_KEY)
-# Using the model we decided on
-_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+_MODEL = settings.GROQ_MODEL
 
 def generate_answer(query: str, context: str, answer_reqs: dict = None) -> str:
     answer_reqs = answer_reqs or {}
